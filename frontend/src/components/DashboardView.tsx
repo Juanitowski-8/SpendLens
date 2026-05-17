@@ -31,7 +31,6 @@ import type {
   CategoryBreakdownItem,
   CreateExpensePayload,
 } from "@/lib/api";
-import { EMAILS_SYNCED } from "@/mockData";
 
 type DashboardViewProps = {
   onBackToLanding: () => void;
@@ -326,7 +325,7 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
               </h1>
 
               <p className="mt-2 max-w-2xl leading-7 text-neutral-600 transition-colors duration-300 dark:text-[#A3A3A3]">
-                Tu mes financiero, resumido desde Gmail.
+                Tu mes financiero, resumido desde gastos manuales y recibos simulados.
               </p>
             </div>
 
@@ -507,13 +506,13 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Última sincronización</CardTitle>
+                <CardTitle className="text-base">Estado de importación</CardTitle>
                 <CardDescription>{syncLabel}</CardDescription>
               </CardHeader>
 
               <CardContent className="text-sm leading-relaxed text-neutral-600 dark:text-[#A3A3A3]">
                 <p className="font-medium text-neutral-950 dark:text-[#F5F5F5]">
-                  {EMAILS_SYNCED} correos revisados · {recentExpenses.length} gastos recientes
+                  Modo demo activo · {recentExpenses.length} gastos recientes
                 </p>
 
                 <p className="mt-2 text-xs text-neutral-500 transition-colors duration-300 dark:text-[#737373]">
@@ -558,7 +557,7 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
                 </div>
 
                 <p className="mt-3 text-xs text-neutral-500">
-                  Por ahora es una simulación local. Más adelante este texto vendrá desde Gmail y será procesado por un LLM real.
+                  Por ahora es una simulación local. En la versión final, este texto vendrá desde Gmail y será procesado por un LLM real.
                 </p>
               </CardContent>
             </Card>
