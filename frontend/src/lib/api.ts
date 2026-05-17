@@ -1,5 +1,39 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
+export type AuthResponse = {
+  token: string;
+  userId: string;
+  name: string;
+  email: string;
+};
+
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
+
+export type RegisterRequest = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+function getAuthToken(): string | null {
+  return localStorage.getItem("spendlens_token");
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token
+    ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+    : { "Content-Type": "application/json" };
+}
+
+function persistAuthToken(response: AuthResponse): AuthResponse {
+  localStorage.setItem("spendlens_token", response.token);
+  return response;
+}
+
 export type Expense = {
   id: string;
   categoryId: string | null;
@@ -54,9 +88,31 @@ async function getErrorMessage(response: Response): Promise<string> {
   }
 }
 
+export async function login(payload: LoginRequest): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await handleResponse<AuthResponse>(response);
+  return persistAuthToken(result);
+}
+
+export async function register(payload: RegisterRequest): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const result = await handleResponse<AuthResponse>(response);
+  return persistAuthToken(result);
+}
+
 export async function getExpenses(): Promise<Expense[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/expenses`, {
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
   });
   return handleResponse<Expense[]>(response);
 }
@@ -64,7 +120,7 @@ export async function getExpenses(): Promise<Expense[]> {
 export async function createExpense(payload: CreateExpensePayload): Promise<Expense> {
   const response = await fetch(`${API_BASE_URL}/api/auth/expenses`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
   return handleResponse<Expense>(response);
@@ -72,21 +128,25 @@ export async function createExpense(payload: CreateExpensePayload): Promise<Expe
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/summary`, {
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
   });
   return handleResponse<DashboardSummary>(response);
 }
 
 export async function getCategoryBreakdown(): Promise<CategoryBreakdownItem[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/category-breakdown`, {
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
   });
   return handleResponse<CategoryBreakdownItem[]>(response);
 }
 
 export async function getRecentExpenses(): Promise<Expense[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/recent-expenses`, {
-    headers: { "Content-Type": "application/json" },
+    headers: getAuthHeaders(),
   });
   return handleResponse<Expense[]>(response);
+}
+
+export function logout(): void {
+  localStorage.removeItem("spendlens_token");
 }

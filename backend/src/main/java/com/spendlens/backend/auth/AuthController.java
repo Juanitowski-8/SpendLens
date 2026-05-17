@@ -7,6 +7,7 @@ import com.spendlens.backend.transactions.CreateTransactionRequest;
 import com.spendlens.backend.transactions.TransactionResponse;
 import com.spendlens.backend.transactions.TransactionService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,8 +15,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-
-    private static final String DEV_EMAIL = "juano@test.com";
 
     private final AuthService authService;
     private final TransactionService transactionService;
@@ -42,34 +41,39 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public MeResponse me() {
-        return authService.me(DEV_EMAIL);
+    public MeResponse me(Authentication authentication) {
+        return authService.me(getEmail(authentication));
     }
 
     @GetMapping("/expenses")
-    public List<TransactionResponse> findAllExpenses() {
-        return transactionService.findAll(DEV_EMAIL);
+    public List<TransactionResponse> findAllExpenses(Authentication authentication) {
+        return transactionService.findAll(getEmail(authentication));
     }
 
     @PostMapping("/expenses")
     public TransactionResponse createExpense(
+            Authentication authentication,
             @Valid @RequestBody CreateTransactionRequest request
     ) {
-        return transactionService.create(request, DEV_EMAIL);
+        return transactionService.create(request, getEmail(authentication));
     }
 
     @GetMapping("/dashboard/summary")
-    public DashboardSummaryResponse getDashboardSummary() {
-        return dashboardService.getDashboardSummary(DEV_EMAIL);
+    public DashboardSummaryResponse getDashboardSummary(Authentication authentication) {
+        return dashboardService.getDashboardSummary(getEmail(authentication));
     }
 
     @GetMapping("/dashboard/category-breakdown")
-    public List<CategoryBreakdownResponse> getCategoryBreakdown() {
-        return dashboardService.getCategoryBreakdown(DEV_EMAIL);
+    public List<CategoryBreakdownResponse> getCategoryBreakdown(Authentication authentication) {
+        return dashboardService.getCategoryBreakdown(getEmail(authentication));
     }
 
     @GetMapping("/dashboard/recent-expenses")
-    public List<TransactionResponse> getRecentExpenses() {
-        return dashboardService.getRecentExpenses(DEV_EMAIL);
+    public List<TransactionResponse> getRecentExpenses(Authentication authentication) {
+        return dashboardService.getRecentExpenses(getEmail(authentication));
+    }
+
+    private String getEmail(Authentication authentication) {
+        return authentication.getName();
     }
 }

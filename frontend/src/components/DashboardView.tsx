@@ -27,9 +27,10 @@ import { EMAILS_SYNCED } from "@/mockData";
 
 type DashboardViewProps = {
   onBackToLanding: () => void;
+  onLogout: () => void;
 };
 
-export function DashboardView({ onBackToLanding }: DashboardViewProps) {
+export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const [month, setMonth] = useState("Mayo 2026");
@@ -217,6 +218,9 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
               <Button onClick={handleSync} className="gap-2">
                 <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
                 Sincronizar Gmail
+              </Button>
+              <Button variant="outline" onClick={onLogout}>
+                Cerrar sesión
               </Button>
             </div>
           </div>
