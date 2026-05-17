@@ -193,6 +193,17 @@ export async function importReceiptText(
 
   return handleResponse<ParseTextImportResult>(response);
 }
+export async function deleteExpense(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/expenses/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const message = await getErrorMessage(response);
+    throw new Error(`API request failed: ${message}`);
+  }
+}
 
 export function logout(): void {
   localStorage.removeItem("spendlens_token");

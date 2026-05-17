@@ -23,6 +23,7 @@ import {
   createExpense,
   importMockReceipts,
   importReceiptText,
+  deleteExpense,
 } from "@/lib/api";
 import type {
   Expense,
@@ -71,6 +72,10 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const syncLabel =
     syncPhase === "syncing"
@@ -245,6 +250,35 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
     }
   };
 
+  const handleDeleteExpense = async (expense: Expense) => {
+    setDeleteError(null);
+    setDeleteMessage(null);
+
+    const confirmed = window.confirm(
+      `¿Eliminar el gasto de ${expense.merchant} por ${formatAmount(expense.amount, expense.currency)}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingExpenseId(expense.id);
+
+    try {
+      await deleteExpense(expense.id);
+      setDeleteMessage("Gasto eliminado correctamente.");
+
+      await loadDashboard();
+
+      window.setTimeout(() => setDeleteMessage(null), 3000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al eliminar gasto";
+      setDeleteError(message);
+    } finally {
+      setDeletingExpenseId(null);
+    }
+  };
+
   const chartBand =
     "from-transparent via-[#2F80FF]/40 to-transparent dark:from-transparent dark:via-[#3BA3FF]/65 dark:to-transparent";
 
@@ -348,6 +382,18 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
             {importMessage ? (
               <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
                 {importMessage}
+              </div>
+            ) : null}
+
+            {deleteError ? (
+              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
+                {deleteError}
+              </div>
+            ) : null}
+
+            {deleteMessage ? (
+              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
+                {deleteMessage}
               </div>
             ) : null}
 
@@ -619,19 +665,20 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
                           <TableHead>Monto</TableHead>
                           <TableHead className="hidden md:table-cell">Origen</TableHead>
                           <TableHead>Estado</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
 
                       <TableBody>
                         {loading ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="py-8 text-center text-neutral-500">
+                            <TableCell colSpan={7} className="py-8 text-center text-neutral-500">
                               Cargando transacciones…
                             </TableCell>
                           </TableRow>
                         ) : expenses.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="py-8 text-center text-neutral-500">
+                            <TableCell colSpan={7} className="py-8 text-center text-neutral-500">
                               No se encontraron gastos.
                             </TableCell>
                           </TableRow>
@@ -658,6 +705,17 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
 
                               <TableCell>
                                 <Badge variant="secondary">Cargado</Badge>
+                              </TableCell>
+
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDeleteExpense(expense)}
+                                  disabled={deletingExpenseId === expense.id}
+                                >
+                                  {deletingExpenseId === expense.id ? "Eliminando…" : "Eliminar"}
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))

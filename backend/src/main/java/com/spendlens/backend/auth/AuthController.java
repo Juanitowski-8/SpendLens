@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -56,6 +57,14 @@ public class AuthController {
             @Valid @RequestBody CreateTransactionRequest request
     ) {
         return transactionService.create(request, getEmail(authentication));
+    }
+
+    @DeleteMapping("/expenses/{id}")
+    public void deleteExpense(
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        transactionService.delete(id, getEmail(authentication));
     }
 
     @GetMapping("/dashboard/summary")
