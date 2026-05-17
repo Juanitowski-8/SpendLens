@@ -24,6 +24,7 @@ function getAuthToken(): string | null {
 
 function getAuthHeaders(): Record<string, string> {
   const token = getAuthToken();
+
   return token
     ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
     : { "Content-Type": "application/json" };
@@ -70,6 +71,22 @@ export type CreateExpensePayload = {
   categoryId?: string | null;
 };
 
+export type MockReceiptImportResult = {
+  importedCount: number;
+  skippedCount: number;
+  createdTransactions: Expense[];
+};
+
+export type ParseTextImportPayload = {
+  text: string;
+};
+
+export type ParseTextImportResult = {
+  importedCount: number;
+  skippedCount: number;
+  createdTransactions: Expense[];
+};
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
     return response.json() as Promise<T>;
@@ -82,7 +99,10 @@ async function handleResponse<T>(response: Response): Promise<T> {
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const body = await response.text();
-    return body ? `${response.status} ${response.statusText}: ${body}` : `${response.status} ${response.statusText}`;
+
+    return body
+      ? `${response.status} ${response.statusText}: ${body}`
+      : `${response.status} ${response.statusText}`;
   } catch {
     return `${response.status} ${response.statusText}`;
   }
@@ -114,6 +134,7 @@ export async function getExpenses(): Promise<Expense[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/expenses`, {
     headers: getAuthHeaders(),
   });
+
   return handleResponse<Expense[]>(response);
 }
 
@@ -123,6 +144,7 @@ export async function createExpense(payload: CreateExpensePayload): Promise<Expe
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
+
   return handleResponse<Expense>(response);
 }
 
@@ -130,6 +152,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/summary`, {
     headers: getAuthHeaders(),
   });
+
   return handleResponse<DashboardSummary>(response);
 }
 
@@ -137,6 +160,7 @@ export async function getCategoryBreakdown(): Promise<CategoryBreakdownItem[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/category-breakdown`, {
     headers: getAuthHeaders(),
   });
+
   return handleResponse<CategoryBreakdownItem[]>(response);
 }
 
@@ -144,21 +168,30 @@ export async function getRecentExpenses(): Promise<Expense[]> {
   const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/recent-expenses`, {
     headers: getAuthHeaders(),
   });
+
   return handleResponse<Expense[]>(response);
 }
-
-export type MockReceiptImportResult = {
-  importedCount: number;
-  skippedCount: number;
-  createdTransactions: Expense[];
-};
 
 export async function importMockReceipts(): Promise<MockReceiptImportResult> {
   const response = await fetch(`${API_BASE_URL}/api/auth/imports/mock-receipts`, {
     method: "POST",
     headers: getAuthHeaders(),
+    body: "{}",
   });
+
   return handleResponse<MockReceiptImportResult>(response);
+}
+
+export async function importReceiptText(
+  payload: ParseTextImportPayload
+): Promise<ParseTextImportResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/imports/parse-text`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  return handleResponse<ParseTextImportResult>(response);
 }
 
 export function logout(): void {

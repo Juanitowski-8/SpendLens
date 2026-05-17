@@ -10,7 +10,10 @@ public class MockReceiptImportResult {
     private int skippedCount;
     private List<TransactionResponse> createdTransactions;
 
-    public MockReceiptImportResult(int importedCount, int skippedCount, List<TransactionResponse> createdTransactions) {
+    public MockReceiptImportResult(
+            int importedCount,
+            int skippedCount,
+            List<TransactionResponse> createdTransactions) {
         this.importedCount = importedCount;
         this.skippedCount = skippedCount;
         this.createdTransactions = createdTransactions;
