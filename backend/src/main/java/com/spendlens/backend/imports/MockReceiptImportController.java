@@ -2,6 +2,7 @@ package com.spendlens.backend.imports;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,5 +19,12 @@ public class MockReceiptImportController {
     @PostMapping("/mock-receipts")
     public MockReceiptImportResult importMockReceipts(Authentication authentication) {
         return importService.importMockReceipts(authentication.getName());
+    }
+
+    @PostMapping("/parse-text")
+    public MockReceiptImportResult importFromText(
+            @RequestBody ParseTextImportRequest request,
+            Authentication authentication) {
+        return importService.importFromText(authentication.getName(), request.getText());
     }
 }
