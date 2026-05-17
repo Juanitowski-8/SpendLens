@@ -21,8 +21,14 @@ import {
   getExpenses,
   getRecentExpenses,
   createExpense,
+  importMockReceipts,
 } from "@/lib/api";
-import type { Expense, DashboardSummary, CategoryBreakdownItem, CreateExpensePayload } from "@/lib/api";
+import type {
+  Expense,
+  DashboardSummary,
+  CategoryBreakdownItem,
+  CreateExpensePayload,
+} from "@/lib/api";
 import { EMAILS_SYNCED } from "@/mockData";
 
 type DashboardViewProps = {
@@ -41,6 +47,9 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const [recentExpenses, setRecentExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const syncLabel =
     syncPhase === "syncing"
@@ -160,6 +169,24 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
     }
   };
 
+  const handleImportReceipts = async () => {
+    setImportError(null);
+    setImportMessage(null);
+    setImporting(true);
+
+    try {
+      const result = await importMockReceipts();
+      setImportMessage(`Se importaron ${result.importedCount} recibos de prueba.`);
+      await loadDashboard();
+      window.setTimeout(() => setImportMessage(null), 5000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al importar recibos";
+      setImportError(message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-5rem)] bg-[#030303] text-white">
       <div className="mx-auto flex max-w-7xl gap-6 px-6 py-8">
@@ -219,6 +246,14 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
                 <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
                 Sincronizar Gmail
               </Button>
+              <Button
+                variant="secondary"
+                onClick={handleImportReceipts}
+                disabled={importing}
+                className="gap-2"
+              >
+                {importing ? "Importando…" : "Importar recibos de prueba"}
+              </Button>
               <Button variant="outline" onClick={onLogout}>
                 Cerrar sesión
               </Button>
@@ -229,6 +264,16 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
             {error ? (
               <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
                 {error}
+              </div>
+            ) : null}
+            {importError ? (
+              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
+                {importError}
+              </div>
+            ) : null}
+            {importMessage ? (
+              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
+                {importMessage}
               </div>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

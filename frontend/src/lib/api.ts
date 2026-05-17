@@ -147,6 +147,20 @@ export async function getRecentExpenses(): Promise<Expense[]> {
   return handleResponse<Expense[]>(response);
 }
 
+export type MockReceiptImportResult = {
+  importedCount: number;
+  skippedCount: number;
+  createdTransactions: Expense[];
+};
+
+export async function importMockReceipts(): Promise<MockReceiptImportResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/imports/mock-receipts`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<MockReceiptImportResult>(response);
+}
+
 export function logout(): void {
   localStorage.removeItem("spendlens_token");
 }
