@@ -1,0 +1,2 @@
+-- Initial Flyway migration for SpendLens.
+-- Tables will be added in the next phase.
