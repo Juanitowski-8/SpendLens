@@ -22,7 +22,16 @@ public class GmailPromotionalFilter {
             "unsubscribe",
             "% off",
             "off today",
-            "limited time"
+            "limited time",
+            "noticias",
+            "breaking news",
+            "now costs",
+            "ahora cuesta",
+            "will cost",
+            "va a costar",
+            "price alert",
+            "save up to",
+            "ahorra hasta"
     };
 
     public boolean isPromotionalEmail(String subject, String snippet, String from) {

@@ -25,6 +25,7 @@ public class GmailMaintenanceService {
     private final GmailCategoryAssigner categoryAssigner;
     private final GmailAmountValidator amountValidator;
     private final GmailPromotionalFilter promotionalFilter;
+    private final GmailPurchaseClassifier purchaseClassifier;
 
     public GmailMaintenanceService(
             TransactionRepository transactionRepository,
@@ -32,7 +33,8 @@ public class GmailMaintenanceService {
             CategoryService categoryService,
             GmailCategoryAssigner categoryAssigner,
             GmailAmountValidator amountValidator,
-            GmailPromotionalFilter promotionalFilter
+            GmailPromotionalFilter promotionalFilter,
+            GmailPurchaseClassifier purchaseClassifier
     ) {
         this.transactionRepository = transactionRepository;
         this.transactionService = transactionService;
@@ -40,6 +42,7 @@ public class GmailMaintenanceService {
         this.categoryAssigner = categoryAssigner;
         this.amountValidator = amountValidator;
         this.promotionalFilter = promotionalFilter;
+        this.purchaseClassifier = purchaseClassifier;
     }
 
     @Transactional(readOnly = true)
@@ -115,6 +118,8 @@ public class GmailMaintenanceService {
     }
 
     private boolean isSuspicious(Transaction transaction) {
+        ParsedEmailContent content = ParsedEmailContent.fromDescription(transaction.getDescription());
+
         return amountValidator.isSuspiciousGmailTransaction(
                 transaction.getAmount(),
                 transaction.getCurrency(),
@@ -123,6 +128,10 @@ public class GmailMaintenanceService {
         ) || promotionalFilter.isPromotionalMerchantOrDescription(
                 transaction.getMerchant(),
                 transaction.getDescription()
+        ) || purchaseClassifier.isNonPurchaseContent(
+                content.subject(),
+                content.snippet(),
+                transaction.getMerchant()
         );
     }
 

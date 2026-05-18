@@ -35,7 +35,10 @@ public class GmailSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GmailSyncService.class);
     private static final String GMAIL_QUERY =
-            "newer_than:90d (receipt OR recibo OR factura OR purchase OR payment OR pago OR compra)";
+            "newer_than:90d ("
+                    + "subject:(recibo OR receipt OR factura OR comprobante OR confirmación OR confirmacion) "
+                    + "OR subject:(\"order confirmation\" OR \"tu pedido\" OR \"pago exitoso\" OR \"payment confirmation\")"
+                    + ") -unsubscribe -newsletter";
     private static final long MAX_MESSAGES = 50L;
 
     private final GmailOAuthService gmailOAuthService;
@@ -46,6 +49,7 @@ public class GmailSyncService {
     private final GmailCategoryAssigner categoryAssigner;
     private final GmailAmountValidator amountValidator;
     private final GmailPromotionalFilter promotionalFilter;
+    private final GmailPurchaseClassifier purchaseClassifier;
     private final GmailMerchantNormalizer merchantNormalizer;
 
     public GmailSyncService(
@@ -57,6 +61,7 @@ public class GmailSyncService {
             GmailCategoryAssigner categoryAssigner,
             GmailAmountValidator amountValidator,
             GmailPromotionalFilter promotionalFilter,
+            GmailPurchaseClassifier purchaseClassifier,
             GmailMerchantNormalizer merchantNormalizer
     ) {
         this.gmailOAuthService = gmailOAuthService;
@@ -67,6 +72,7 @@ public class GmailSyncService {
         this.categoryAssigner = categoryAssigner;
         this.amountValidator = amountValidator;
         this.promotionalFilter = promotionalFilter;
+        this.purchaseClassifier = purchaseClassifier;
         this.merchantNormalizer = merchantNormalizer;
     }
 
@@ -108,6 +114,12 @@ public class GmailSyncService {
                     if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
                         skippedCount++;
                         bump(skippedReasons, "promotional");
+                        continue;
+                    }
+
+                    if (purchaseClassifier.isNonPurchaseContent(subject, snippet, from)) {
+                        skippedCount++;
+                        bump(skippedReasons, "not_a_purchase");
                         continue;
                     }
 

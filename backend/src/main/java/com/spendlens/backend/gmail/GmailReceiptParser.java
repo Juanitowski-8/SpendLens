@@ -37,17 +37,20 @@ public class GmailReceiptParser {
     );
 
     private final GmailPromotionalFilter promotionalFilter;
+    private final GmailPurchaseClassifier purchaseClassifier;
     private final GmailAmountValidator amountValidator;
     private final GmailMerchantNormalizer merchantNormalizer;
     private final GmailFxConverter fxConverter;
 
     public GmailReceiptParser(
             GmailPromotionalFilter promotionalFilter,
+            GmailPurchaseClassifier purchaseClassifier,
             GmailAmountValidator amountValidator,
             GmailMerchantNormalizer merchantNormalizer,
             GmailFxConverter fxConverter
     ) {
         this.promotionalFilter = promotionalFilter;
+        this.purchaseClassifier = purchaseClassifier;
         this.amountValidator = amountValidator;
         this.merchantNormalizer = merchantNormalizer;
         this.fxConverter = fxConverter;
@@ -60,6 +63,10 @@ public class GmailReceiptParser {
             Long internalDateMillis
     ) {
         if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
+            return Optional.empty();
+        }
+
+        if (!purchaseClassifier.looksLikeCompletedPurchase(subject, snippet, from)) {
             return Optional.empty();
         }
 
@@ -144,12 +151,30 @@ public class GmailReceiptParser {
             ));
         }
 
-        return candidates.stream()
+        Optional<ConvertedCandidate> best = candidates.stream()
                 .max(Comparator
                         .comparingInt(ScoredCandidate::score)
                         .thenComparing(ScoredCandidate::amountCop)
                         .thenComparing(ScoredCandidate::position, Comparator.reverseOrder()))
                 .map(c -> new ConvertedCandidate(c.amountCop(), c.conversionNote()));
+
+        if (best.isPresent() && candidates.stream().mapToInt(ScoredCandidate::score).max().orElse(0) < 10) {
+            String haystack = buildAmountHaystack(subject, snippet);
+            boolean hasAmountContext = haystack.contains("total pagado")
+                    || haystack.contains("valor pagado")
+                    || haystack.contains("amount paid")
+                    || haystack.contains("order total")
+                    || haystack.contains("charged");
+            if (!hasAmountContext) {
+                return Optional.empty();
+            }
+        }
+
+        return best;
+    }
+
+    private String buildAmountHaystack(String subject, String snippet) {
+        return (" " + safe(subject) + " " + safe(snippet) + " ").toLowerCase(Locale.ROOT);
     }
 
     private String extractMerchant(String text, String from) {
