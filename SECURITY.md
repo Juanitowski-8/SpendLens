@@ -25,10 +25,16 @@
 - Google OAuth: orígenes y redirect URIs de producción en Google Console.
 - Considerar en el futuro: rate limiting, monitoreo (Sentry/Datadog), auditoría de logs.
 
+## Correo (recuperación de contraseña)
+
+- Variables SMTP en Render: `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`.
+- Si rotas la contraseña SMTP, actualiza `MAIL_PASSWORD` y redeploy.
+- En local (`SPRING_PROFILES_ACTIVE=local`) el enlace de reset puede aparecer en logs; no uses eso en producción.
+
 ## Logs
 
 - No registrar tokens JWT completos, refresh tokens de Gmail ni contraseñas.
-- El servicio de recuperación de contraseña solo registra URLs de reset en **desarrollo**.
+- El servicio de recuperación solo registra URLs de reset cuando el correo SMTP no está activo y el perfil es local/desarrollo.
 
 ## Contacto
 

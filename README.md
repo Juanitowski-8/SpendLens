@@ -68,9 +68,23 @@ cd ..\backend
 - Filtros avanzados en tabla y exportación CSV / Excel / PDF
 - Recuperación de contraseña y desconexión de Gmail
 
+## Recuperación de contraseña (correo)
+
+En **producción** (Render), configura SMTP:
+
+| Variable | Ejemplo |
+|----------|---------|
+| `MAIL_ENABLED` | `true` |
+| `MAIL_HOST` | `smtp.sendgrid.net` |
+| `MAIL_PORT` | `587` |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | credenciales del proveedor |
+| `MAIL_FROM` | remitente verificado |
+
+En **local**, el enlace de reset se imprime en los logs del backend si no activas SMTP.
+
 ## Deploy en producción
 
-Ver **[DEPLOY.md](./DEPLOY.md)** (Vercel + Render + Neon + Google OAuth).
+Ver **[DEPLOY.md](./DEPLOY.md)** (Vercel + Render + Neon + Google OAuth + SMTP).
 
 Tras cada push a `master`:
 

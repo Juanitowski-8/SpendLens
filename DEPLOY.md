@@ -94,6 +94,16 @@ En Windows local el wrapper es `mvnw.cmd`; en Render/Linux usa `./mvnw`.
 | `GOOGLE_GMAIL_CLIENT_SECRET` | Sí (OAuth) | Client secret |
 | `GOOGLE_GMAIL_REDIRECT_URI` | Sí | `https://BACKEND_PUBLIC_URL/api/auth/gmail/callback` |
 | `GOOGLE_GMAIL_SCOPES` | No | `https://www.googleapis.com/auth/gmail.readonly` |
+| `APP_PUBLIC_URL` | Recomendada | Misma URL que `FRONTEND_URL` (enlaces de reset) |
+| `MAIL_ENABLED` | Para reset por correo | `true` en producción |
+| `MAIL_HOST` | Si `MAIL_ENABLED` | ej. `smtp.sendgrid.net`, `smtp.resend.com` |
+| `MAIL_PORT` | No | `587` (TLS) |
+| `MAIL_USERNAME` | Si el SMTP lo pide | usuario SMTP |
+| `MAIL_PASSWORD` | Si el SMTP lo pide | contraseña o API key SMTP |
+| `MAIL_FROM` | Recomendada | `no-reply@tu-dominio.com` (remitente verificado) |
+| `MAIL_LOG_RESET_IN_DEV` | No | `false` en producción |
+
+Con `MAIL_ENABLED=true` y host SMTP válido, `POST /api/auth/forgot-password` envía el enlace por correo. En local (`SPRING_PROFILES_ACTIVE=local`) el enlace sigue apareciendo en logs si no configuras SMTP.
 
 **Health check:** `GET /api/health`
 
