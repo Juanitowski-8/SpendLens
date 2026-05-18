@@ -24,6 +24,7 @@ import {
   importMockReceipts,
   importReceiptText,
   deleteExpense,
+  syncGmail,
 } from "@/lib/api";
 import type {
   Expense,
@@ -76,6 +77,9 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   const syncLabel =
     syncPhase === "syncing"
       ? "Sincronizando…"
@@ -83,9 +87,22 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
         ? "Última sincronización completada"
         : "Listo para sincronizar";
 
-  const handleSync = () => {
+  const handleSync = async () => {
     setSyncPhase("syncing");
-    window.setTimeout(() => setSyncPhase("completed"), 1800);
+    setSyncMessage(null);
+    setSyncError(null);
+
+    try {
+      const result = await syncGmail();
+      setSyncMessage(
+        `Sincronización completada: ${result.importedCount} importados, ${result.skippedCount} omitidos.`,
+      );
+      await loadDashboard();
+      setSyncPhase("completed");
+    } catch (err) {
+      setSyncPhase("idle");
+      setSyncError(err instanceof Error ? err.message : "Error al sincronizar Gmail");
+    }
   };
 
   const formatAmount = (value: number | null | undefined, currencyCode = "COP") => {
@@ -381,6 +398,18 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
             {importMessage ? (
               <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
                 {importMessage}
+              </div>
+            ) : null}
+
+            {syncError ? (
+              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
+                {syncError}
+              </div>
+            ) : null}
+
+            {syncMessage ? (
+              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
+                {syncMessage}
               </div>
             ) : null}
 

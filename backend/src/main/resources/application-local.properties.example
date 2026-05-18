@@ -1,0 +1,12 @@
+# Local overrides (DO NOT commit secrets).
+# 1. Copy this file to application-local.properties (gitignored)
+# 2. Run backend with: SPRING_PROFILES_ACTIVE=local
+#
+# Example for Docker Compose in this repo (user/password: spendlens/spendlens):
+
+# google.gmail.client-id=your-client-id.apps.googleusercontent.com
+# google.gmail.client-secret=your-client-secret
+# google.gmail.redirect-uri=http://localhost:8081/api/auth/gmail/callback
+# google.gmail.scopes=https://www.googleapis.com/auth/gmail.readonly
+#
+# frontend.url=http://localhost:5173

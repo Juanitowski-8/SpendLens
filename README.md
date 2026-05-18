@@ -1,48 +1,67 @@
 # SpendLens (monorepo)
 
-This repository contains two workspaces: `frontend/` and `backend/` (backend scaffold not yet added).
+SpendLens convierte recibos y gastos en un dashboard financiero. Monorepo con **frontend** (React + Vite + TypeScript + Tailwind) y **backend** (Spring Boot 3 + PostgreSQL + Flyway + JWT).
 
-Frontend: a Vite + React + TypeScript app located in `frontend/`.
+## Desarrollo local
 
-To build the frontend:
+### 1. PostgreSQL
 
-1. cd frontend
-2. npm install
-3. npm run build
+```powershell
+docker compose up -d
+```
 
-## Run locally
+Base: `spendlens`, usuario/contraseña: `spendlens` / `spendlens`.
 
-1. Start PostgreSQL:
+### 2. Backend
 
-   ```powershell
-   docker compose up -d
-   ```
+```powershell
+cd backend
+# Opcional: copia application-local.properties.example → application-local.properties (Gmail OAuth local)
+$env:SPRING_PROFILES_ACTIVE="local"
+.\mvnw.cmd spring-boot:run
+```
 
-2. Start the backend:
+API: `http://localhost:8081`  
+Health: `GET /api/health`
 
-   ```powershell
-   cd backend
-   .\mvnw.cmd spring-boot:run
-   ```
+### 3. Frontend
 
-3. Start the frontend:
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm run dev
+```
 
-   ```powershell
-   cd frontend
-   npm install
-   npm run dev
-   ```
+En `frontend/.env.local`:
 
-4. Environment variables:
+```
+VITE_API_URL=http://localhost:8081
+```
 
-   - Review `docs/FRONTEND_ENV.md`
-   - Copy `frontend/.env.example` to `frontend/.env.local` if needed
-   - Set `VITE_API_URL=http://localhost:8081`
+### 4. Build
 
-5. Current temporary routes:
+```powershell
+cd frontend
+npm run build
 
-   - GET `/api/auth/expenses`
-   - POST `/api/auth/expenses`
-   - GET `/api/auth/dashboard/summary`
-   - GET `/api/auth/dashboard/category-breakdown`
-   - GET `/api/auth/dashboard/recent-expenses`
+cd ..\backend
+.\mvnw.cmd compile -DskipTests
+```
+
+## API principal (JWT)
+
+- `POST /api/auth/register`, `POST /api/auth/login`
+- `GET|POST|DELETE /api/auth/expenses`
+- `GET /api/auth/dashboard/summary`, `category-breakdown`, `recent-expenses`
+- `POST /api/auth/imports/mock-receipts`, `parse-text`
+- `GET /api/auth/gmail/connect-url` (JWT), `GET /api/auth/gmail/callback`, `POST /api/auth/gmail/sync`
+
+## Deploy en producción
+
+Ver **[DEPLOY.md](./DEPLOY.md)** (Vercel + Render/Railway/Fly.io + Neon + Google OAuth).
+
+## Documentación
+
+- `docs/FRONTEND_ENV.md` — variables del frontend
+- `DROP_OFF.md` — notas de estado del proyecto
