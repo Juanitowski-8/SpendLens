@@ -37,6 +37,11 @@ import {
   type ExpenseFilterState,
 } from "@/lib/expenseFilters";
 import { exportExpensesCsv, exportExpensesExcel, exportSummaryPdf } from "@/lib/export";
+import { buildDailySpendData, buildSpendByStoreData } from "@/lib/chartData";
+import {
+  buildRecentPeriodOptions,
+  type DashboardPeriod,
+} from "@/lib/dashboardPeriods";
 import { cn, displayCategoryName, formatCurrencyCOP } from "@/lib/utils";
 import {
   getDashboardSummary,
@@ -69,17 +74,7 @@ type DashboardViewProps = {
 
 type AlertItem = { id: string; tone: "success" | "error"; message: string };
 
-type DashboardPeriod = {
-  year: number;
-  month: number;
-  label: string;
-};
-
-const PERIOD_OPTIONS: DashboardPeriod[] = [
-  { year: 2026, month: 5, label: "Mayo 2026" },
-  { year: 2026, month: 4, label: "Abril 2026" },
-  { year: 2026, month: 3, label: "Marzo 2026" },
-];
+const PERIOD_OPTIONS = buildRecentPeriodOptions(12);
 
 const glassCard =
   "rounded-[1.75rem] border border-black/10 bg-white/80 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]";
@@ -156,6 +151,16 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const filteredExpenses = useMemo(
     () => filterAndSortExpenses(expenses, expenseFilters),
     [expenses, expenseFilters],
+  );
+
+  const dailySpendChartData = useMemo(
+    () => buildDailySpendData(expenses, selectedPeriod.year, selectedPeriod.month),
+    [expenses, selectedPeriod.year, selectedPeriod.month],
+  );
+
+  const storeSpendChartData = useMemo(
+    () => buildSpendByStoreData(expenses),
+    [expenses],
   );
 
   const formatAmount = useCallback((value: number | null | undefined, currencyCode = "COP") => {
@@ -840,20 +845,30 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
             <Card className={cn("relative overflow-hidden xl:col-span-2", glassCard, "border-0 bg-transparent shadow-none")}>
               <CardHeader className="border-b border-black/10 pb-4 dark:border-white/10">
                 <CardTitle className="text-base font-semibold">Gastos por día</CardTitle>
-                <CardDescription>Vista temporal de tu actividad (datos de demostración en gráfico).</CardDescription>
+                <CardDescription>
+                  Totales diarios de {selectedPeriod.label} según tus gastos registrados.
+                </CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
-                <DailySpendChart />
+                {loading ? (
+                  <p className="py-16 text-center text-sm text-neutral-500">Cargando gráfico…</p>
+                ) : (
+                  <DailySpendChart data={dailySpendChartData} />
+                )}
               </CardContent>
             </Card>
 
             <Card className={cn("relative overflow-hidden", glassCard, "border-0 bg-transparent shadow-none")}>
               <CardHeader className="border-b border-black/10 pb-4 dark:border-white/10">
                 <CardTitle className="text-base font-semibold">Por comercio</CardTitle>
-                <CardDescription>Comercios con mayor gasto acumulado.</CardDescription>
+                <CardDescription>Top comercios del periodo por monto total.</CardDescription>
               </CardHeader>
               <CardContent className="pt-6">
-                <StoreSpendChart />
+                {loading ? (
+                  <p className="py-16 text-center text-sm text-neutral-500">Cargando gráfico…</p>
+                ) : (
+                  <StoreSpendChart data={storeSpendChartData} />
+                )}
               </CardContent>
             </Card>
           </section>
