@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { FilterSelect } from "@/components/FilterSelect";
 import { DailySpendChart, StoreSpendChart } from "@/components/SpendCharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -147,6 +148,11 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const categoryOptions = useMemo(() => collectCategoryOptions(expenses), [expenses]);
+
+  const categoryFilterOptions = useMemo(
+    () => [{ value: "ALL", label: "Todas" }, ...categoryOptions.map((cat) => ({ value: cat, label: cat }))],
+    [categoryOptions],
+  );
 
   const filteredExpenses = useMemo(
     () => filterAndSortExpenses(expenses, expenseFilters),
@@ -1075,33 +1081,26 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   />
                 </Field>
                 <Field label="Categoría">
-                  <select
-                    aria-label="Filtrar por categoría"
+                  <FilterSelect
+                    ariaLabel="Filtrar por categoría"
                     value={expenseFilters.category}
-                    onChange={(e) => setExpenseFilters((f) => ({ ...f, category: e.target.value }))}
-                    className={inputClass}
-                  >
-                    <option value="ALL">Todas</option>
-                    {categoryOptions.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                    options={categoryFilterOptions}
+                    onChange={(category) => setExpenseFilters((f) => ({ ...f, category }))}
+                  />
                 </Field>
                 <Field label="Origen">
-                  <select
-                    aria-label="Filtrar por origen"
+                  <FilterSelect
+                    ariaLabel="Filtrar por origen"
                     value={expenseFilters.source}
-                    onChange={(e) =>
-                      setExpenseFilters((f) => ({ ...f, source: e.target.value as ExpenseFilterState["source"] }))
+                    options={[
+                      { value: "ALL", label: "Todos" },
+                      { value: "GMAIL", label: "Gmail" },
+                      { value: "MANUAL", label: "Manual" },
+                    ]}
+                    onChange={(source) =>
+                      setExpenseFilters((f) => ({ ...f, source: source as ExpenseFilterState["source"] }))
                     }
-                    className={inputClass}
-                  >
-                    <option value="ALL">Todos</option>
-                    <option value="GMAIL">Gmail</option>
-                    <option value="MANUAL">Manual</option>
-                  </select>
+                  />
                 </Field>
                 <Field label="Monto mín.">
                   <input
@@ -1124,19 +1123,19 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   />
                 </Field>
                 <Field label="Ordenar">
-                  <select
-                    aria-label="Ordenar transacciones"
+                  <FilterSelect
+                    ariaLabel="Ordenar transacciones"
                     value={expenseFilters.sort}
-                    onChange={(e) =>
-                      setExpenseFilters((f) => ({ ...f, sort: e.target.value as ExpenseFilterState["sort"] }))
+                    options={[
+                      { value: "date-desc", label: "Fecha (reciente)" },
+                      { value: "date-asc", label: "Fecha (antigua)" },
+                      { value: "amount-desc", label: "Monto (mayor)" },
+                      { value: "amount-asc", label: "Monto (menor)" },
+                    ]}
+                    onChange={(sort) =>
+                      setExpenseFilters((f) => ({ ...f, sort: sort as ExpenseFilterState["sort"] }))
                     }
-                    className={inputClass}
-                  >
-                    <option value="date-desc">Fecha (reciente)</option>
-                    <option value="date-asc">Fecha (antigua)</option>
-                    <option value="amount-desc">Monto (mayor)</option>
-                    <option value="amount-asc">Monto (menor)</option>
-                  </select>
+                  />
                 </Field>
               </div>
               {hasActiveFilters(expenseFilters) ? (

@@ -23,9 +23,11 @@ type DropdownMenuProps = {
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  fullWidth?: boolean;
+  className?: string;
 };
 
-export function DropdownMenu({ children, open, onOpenChange }: DropdownMenuProps) {
+export function DropdownMenu({ children, open, onOpenChange, fullWidth, className }: DropdownMenuProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const menuId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,7 +72,10 @@ export function DropdownMenu({ children, open, onOpenChange }: DropdownMenuProps
 
   return (
     <DropdownMenuContext.Provider value={{ open: isOpen, setOpen, menuId }}>
-      <div ref={containerRef} className="relative inline-block">
+      <div
+        ref={containerRef}
+        className={cn("relative", fullWidth ? "block w-full" : "inline-block", className)}
+      >
         {children}
       </div>
     </DropdownMenuContext.Provider>
