@@ -19,7 +19,7 @@ public class TransactionController {
 
     @GetMapping
     public List<TransactionResponse> findAll(Authentication authentication) {
-        return transactionService.findAll(authentication.getName());
+        return transactionService.findAll(authentication.getName(), null, null);
     }
 
     @GetMapping("/{id}")

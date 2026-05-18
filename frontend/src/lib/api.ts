@@ -174,10 +174,21 @@ export async function register(payload: RegisterRequest): Promise<AuthResponse> 
   return persistAuthToken(result);
 }
 
-export async function getExpenses(): Promise<Expense[]> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/expenses`, {
-    headers: getAuthHeaders(),
+function dashboardPeriodQuery(year: number, month: number): string {
+  const params = new URLSearchParams({
+    year: String(year),
+    month: String(month),
   });
+  return `?${params.toString()}`;
+}
+
+export async function getExpenses(year: number, month: number): Promise<Expense[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/expenses${dashboardPeriodQuery(year, month)}`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
 
   return handleResponse<Expense[]>(response);
 }
@@ -192,26 +203,38 @@ export async function createExpense(payload: CreateExpensePayload): Promise<Expe
   return handleResponse<Expense>(response);
 }
 
-export async function getDashboardSummary(): Promise<DashboardSummary> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/summary`, {
-    headers: getAuthHeaders(),
-  });
+export async function getDashboardSummary(year: number, month: number): Promise<DashboardSummary> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/dashboard/summary${dashboardPeriodQuery(year, month)}`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
 
   return handleResponse<DashboardSummary>(response);
 }
 
-export async function getCategoryBreakdown(): Promise<CategoryBreakdownItem[]> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/category-breakdown`, {
-    headers: getAuthHeaders(),
-  });
+export async function getCategoryBreakdown(
+  year: number,
+  month: number,
+): Promise<CategoryBreakdownItem[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/dashboard/category-breakdown${dashboardPeriodQuery(year, month)}`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
 
   return handleResponse<CategoryBreakdownItem[]>(response);
 }
 
-export async function getRecentExpenses(): Promise<Expense[]> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/recent-expenses`, {
-    headers: getAuthHeaders(),
-  });
+export async function getRecentExpenses(year: number, month: number): Promise<Expense[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/dashboard/recent-expenses${dashboardPeriodQuery(year, month)}`,
+    {
+      headers: getAuthHeaders(),
+    },
+  );
 
   return handleResponse<Expense[]>(response);
 }

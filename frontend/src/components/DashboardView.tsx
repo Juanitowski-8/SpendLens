@@ -52,6 +52,18 @@ type DashboardViewProps = {
 
 type AlertItem = { id: string; tone: "success" | "error"; message: string };
 
+type DashboardPeriod = {
+  year: number;
+  month: number;
+  label: string;
+};
+
+const PERIOD_OPTIONS: DashboardPeriod[] = [
+  { year: 2026, month: 5, label: "Mayo 2026" },
+  { year: 2026, month: 4, label: "Abril 2026" },
+  { year: 2026, month: 3, label: "Marzo 2026" },
+];
+
 const glassCard =
   "rounded-[1.75rem] border border-black/10 bg-white/80 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]";
 
@@ -62,7 +74,9 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
-  const [month, setMonth] = useState("Mayo 2026");
+  const [selectedPeriod, setSelectedPeriod] = useState<DashboardPeriod>(PERIOD_OPTIONS[0]);
+  const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "completed">("completed");
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -132,16 +146,17 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     [formatAmount],
   );
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (period: DashboardPeriod = selectedPeriod) => {
     setLoading(true);
     setError(null);
 
     try {
+      const { year, month } = period;
       const [summaryData, breakdownData, expensesData, recentData] = await Promise.all([
-        getDashboardSummary(),
-        getCategoryBreakdown(),
-        getExpenses(),
-        getRecentExpenses(),
+        getDashboardSummary(year, month),
+        getCategoryBreakdown(year, month),
+        getExpenses(year, month),
+        getRecentExpenses(year, month),
       ]);
 
       setSummary(summaryData);
@@ -154,11 +169,16 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedPeriod]);
 
   useEffect(() => {
-    void loadDashboard();
-  }, [loadDashboard]);
+    void loadDashboard(selectedPeriod);
+  }, [selectedPeriod, loadDashboard]);
+
+  const handleSelectPeriod = (period: DashboardPeriod) => {
+    setSelectedPeriod(period);
+    setPeriodMenuOpen(false);
+  };
 
   const scrollTo = (target: "top" | "table") => {
     const el = target === "top" ? topRef.current : tableRef.current;
@@ -418,25 +438,34 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   Acciones del mes
                 </h2>
                 <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  Periodo visible: <span className="font-medium text-neutral-900 dark:text-white">{month}</span>
+                  Periodo visible:{" "}
+                  <span className="font-medium text-neutral-900 dark:text-white">{selectedPeriod.label}</span>
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <DropdownMenu>
+                <DropdownMenu open={periodMenuOpen} onOpenChange={setPeriodMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       className="min-w-[132px] justify-between gap-2 rounded-full border-black/10 bg-white/70 dark:border-white/10 dark:bg-white/[0.06]"
                     >
-                      {month}
+                      {selectedPeriod.label}
                       <ChevronDown className="size-4 opacity-60" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setMonth("Mayo 2026")}>Mayo 2026</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMonth("Abril 2026")}>Abril 2026</DropdownMenuItem>
-                    <DropdownMenuItem disabled>Marzo 2026</DropdownMenuItem>
+                    {PERIOD_OPTIONS.map((period) => (
+                      <DropdownMenuItem
+                        key={period.label}
+                        onClick={() => handleSelectPeriod(period)}
+                        className={cn(
+                          period.label === selectedPeriod.label && "bg-black/5 dark:bg-white/10",
+                        )}
+                      >
+                        {period.label}
+                      </DropdownMenuItem>
+                    ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -449,7 +478,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   {syncPhase === "syncing" ? "Sincronizando…" : "Sincronizar Gmail"}
                 </Button>
 
-                <DropdownMenu>
+                <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
@@ -461,11 +490,22 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem onClick={handleImportReceipts} disabled={importing}>
+                    <DropdownMenuItem
+                      disabled={importing}
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        void handleImportReceipts();
+                      }}
+                    >
                       {importing ? "Importando…" : "Importar recibos de prueba"}
                     </DropdownMenuItem>
                     <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
-                    <DropdownMenuItem onClick={() => scrollTo("table")}>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        scrollTo("table");
+                      }}
+                    >
                       Ver todas las transacciones
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -493,7 +533,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       : "--"
                 }
                 fullValue={summary ? formatAmount(summary.totalSpent, summary.currency) : undefined}
-                hint={`${summary?.currency ?? "COP"} · ${month}`}
+                hint={`${summary?.currency ?? "COP"} · ${selectedPeriod.label}`}
               />
               <MetricCard
                 icon={Hash}

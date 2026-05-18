@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -32,12 +34,31 @@ public class TransactionService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> findAll(String email) {
-        return transactionRepository
-                .findByUserEmailOrderByTransactionDateDescCreatedAtDesc(normalizeEmail(email))
+    public List<TransactionResponse> findAll(String email, Integer year, Integer month) {
+        return findTransactionsForPeriod(email, year, month)
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<Transaction> findTransactionsForPeriod(String email, Integer year, Integer month) {
+        String normalizedEmail = normalizeEmail(email);
+        YearMonth period = com.spendlens.backend.dashboard.DashboardPeriod.resolve(year, month);
+
+        if (period == null) {
+            return transactionRepository.findByUserEmailOrderByTransactionDateDescCreatedAtDesc(normalizedEmail);
+        }
+
+        LocalDate start = com.spendlens.backend.dashboard.DashboardPeriod.startDate(period);
+        LocalDate end = com.spendlens.backend.dashboard.DashboardPeriod.endDate(period);
+
+        return transactionRepository
+                .findByUserEmailAndTransactionDateBetweenOrderByTransactionDateDescCreatedAtDesc(
+                        normalizedEmail,
+                        start,
+                        end
+                );
     }
 
     @Transactional(readOnly = true)

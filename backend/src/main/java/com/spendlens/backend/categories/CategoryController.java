@@ -65,7 +65,7 @@ public class CategoryController {
 
     @GetMapping("/expenses")
     public List<TransactionResponse> findAllExpenses(Authentication authentication) {
-        return transactionService.findAll(authentication.getName());
+        return transactionService.findAll(authentication.getName(), null, null);
     }
 
     @PostMapping("/expenses")

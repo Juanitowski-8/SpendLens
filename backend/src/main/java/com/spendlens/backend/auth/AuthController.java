@@ -47,8 +47,12 @@ public class AuthController {
     }
 
     @GetMapping("/expenses")
-    public List<TransactionResponse> findAllExpenses(Authentication authentication) {
-        return transactionService.findAll(getEmail(authentication));
+    public List<TransactionResponse> findAllExpenses(
+            Authentication authentication,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        return transactionService.findAll(getEmail(authentication), year, month);
     }
 
     @PostMapping("/expenses")
@@ -68,18 +72,30 @@ public class AuthController {
     }
 
     @GetMapping("/dashboard/summary")
-    public DashboardSummaryResponse getDashboardSummary(Authentication authentication) {
-        return dashboardService.getDashboardSummary(getEmail(authentication));
+    public DashboardSummaryResponse getDashboardSummary(
+            Authentication authentication,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        return dashboardService.getDashboardSummary(getEmail(authentication), year, month);
     }
 
     @GetMapping("/dashboard/category-breakdown")
-    public List<CategoryBreakdownResponse> getCategoryBreakdown(Authentication authentication) {
-        return dashboardService.getCategoryBreakdown(getEmail(authentication));
+    public List<CategoryBreakdownResponse> getCategoryBreakdown(
+            Authentication authentication,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        return dashboardService.getCategoryBreakdown(getEmail(authentication), year, month);
     }
 
     @GetMapping("/dashboard/recent-expenses")
-    public List<TransactionResponse> getRecentExpenses(Authentication authentication) {
-        return dashboardService.getRecentExpenses(getEmail(authentication));
+    public List<TransactionResponse> getRecentExpenses(
+            Authentication authentication,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        return dashboardService.getRecentExpenses(getEmail(authentication), year, month);
     }
 
     private String getEmail(Authentication authentication) {

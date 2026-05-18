@@ -12,6 +12,12 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     List<Transaction> findByUserEmailOrderByTransactionDateDescCreatedAtDesc(String email);
 
+    List<Transaction> findByUserEmailAndTransactionDateBetweenOrderByTransactionDateDescCreatedAtDesc(
+            String email,
+            LocalDate startDate,
+            LocalDate endDate
+    );
+
     Optional<Transaction> findByIdAndUserEmail(UUID id, String email);
 
     boolean existsByUser_IdAndMerchantIgnoreCaseAndAmountAndTransactionDate(

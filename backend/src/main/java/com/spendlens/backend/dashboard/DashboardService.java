@@ -2,8 +2,8 @@ package com.spendlens.backend.dashboard;
 
 import com.spendlens.backend.categories.Category;
 import com.spendlens.backend.transactions.Transaction;
-import com.spendlens.backend.transactions.TransactionRepository;
 import com.spendlens.backend.transactions.TransactionResponse;
+import com.spendlens.backend.transactions.TransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,39 +18,21 @@ import java.util.stream.Collectors;
 @Service
 public class DashboardService {
 
-    private final TransactionRepository transactionRepository;
+    private final TransactionService transactionService;
 
-    public DashboardService(TransactionRepository transactionRepository) {
-        this.transactionRepository = transactionRepository;
+    public DashboardService(TransactionService transactionService) {
+        this.transactionService = transactionService;
     }
 
     @Transactional(readOnly = true)
-    public DashboardSummaryResponse getDashboardSummary(String email) {
-        List<Transaction> transactions = findTransactions(email);
-
-        BigDecimal totalSpent = transactions.stream()
-                .map(Transaction::getAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long expenseCount = transactions.size();
-
-        BigDecimal averageExpense = expenseCount == 0
-                ? BigDecimal.ZERO
-                : totalSpent.divide(BigDecimal.valueOf(expenseCount), 2, RoundingMode.HALF_UP);
-
-        String currency = transactions.stream()
-                .map(Transaction::getCurrency)
-                .filter(c -> c != null && !c.isBlank())
-                .findFirst()
-                .orElse("COP");
-
-        return new DashboardSummaryResponse(totalSpent, expenseCount, averageExpense, currency);
+    public DashboardSummaryResponse getDashboardSummary(String email, Integer year, Integer month) {
+        List<Transaction> transactions = findTransactions(email, year, month);
+        return buildSummary(transactions);
     }
 
     @Transactional(readOnly = true)
-    public List<CategoryBreakdownResponse> getCategoryBreakdown(String email) {
-        List<Transaction> transactions = findTransactions(email);
+    public List<CategoryBreakdownResponse> getCategoryBreakdown(String email, Integer year, Integer month) {
+        List<Transaction> transactions = findTransactions(email, year, month);
 
         if (transactions.isEmpty()) {
             return Collections.emptyList();
@@ -77,16 +59,36 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> getRecentExpenses(String email) {
-        return findTransactions(email).stream()
+    public List<TransactionResponse> getRecentExpenses(String email, Integer year, Integer month) {
+        return findTransactions(email, year, month).stream()
                 .limit(10)
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
-    private List<Transaction> findTransactions(String email) {
-        return transactionRepository
-                .findByUserEmailOrderByTransactionDateDescCreatedAtDesc(normalizeEmail(email));
+    private List<Transaction> findTransactions(String email, Integer year, Integer month) {
+        return transactionService.findTransactionsForPeriod(email, year, month);
+    }
+
+    private DashboardSummaryResponse buildSummary(List<Transaction> transactions) {
+        BigDecimal totalSpent = transactions.stream()
+                .map(Transaction::getAmount)
+                .filter(amount -> amount != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long expenseCount = transactions.size();
+
+        BigDecimal averageExpense = expenseCount == 0
+                ? BigDecimal.ZERO
+                : totalSpent.divide(BigDecimal.valueOf(expenseCount), 2, RoundingMode.HALF_UP);
+
+        String currency = transactions.stream()
+                .map(Transaction::getCurrency)
+                .filter(c -> c != null && !c.isBlank())
+                .findFirst()
+                .orElse("COP");
+
+        return new DashboardSummaryResponse(totalSpent, expenseCount, averageExpense, currency);
     }
 
     private TransactionResponse toResponse(Transaction transaction) {
@@ -104,13 +106,5 @@ public class DashboardService {
                 transaction.getSource(),
                 transaction.getCreatedAt(),
                 transaction.getUpdatedAt());
-    }
-
-    private String normalizeEmail(String email) {
-        if (email == null) {
-            return null;
-        }
-
-        return email.trim().toLowerCase(Locale.ROOT);
     }
 }

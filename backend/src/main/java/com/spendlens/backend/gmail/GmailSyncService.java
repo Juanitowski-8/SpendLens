@@ -95,6 +95,12 @@ public class GmailSyncService {
 
                     GmailReceiptParser.ParsedGmailReceipt receipt = parsedReceipt.get();
 
+                    if ("COP".equalsIgnoreCase(receipt.currency())
+                            && receipt.amount().compareTo(GmailReceiptParser.MAX_REASONABLE_COP_AMOUNT) > 0) {
+                        skippedCount++;
+                        continue;
+                    }
+
                     if (isDuplicate(user.getId(), receipt.merchant(), receipt.amount(), receipt.transactionDate())) {
                         skippedCount++;
                         continue;

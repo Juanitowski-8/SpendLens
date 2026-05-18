@@ -19,7 +19,7 @@ public class ExpenseController {
 
     @GetMapping
     public List<TransactionResponse> findAll(Authentication authentication) {
-        return transactionService.findAll(authentication.getName());
+        return transactionService.findAll(authentication.getName(), null, null);
     }
 
     @PostMapping
