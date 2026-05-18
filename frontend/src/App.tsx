@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowRight,
+  Briefcase,
+  Check,
   LayoutDashboard,
   Mail,
   ScanLine,
   ShieldCheck,
   Sparkles,
+  Users,
   WalletCards,
 } from "lucide-react";
 
@@ -239,10 +242,44 @@ export default function App() {
         <DashboardView onBackToLanding={handleLogout} onLogout={handleLogout} />
       ) : (
         <main className="relative z-10">
-          {publicPage === "home" ? <HomePage onConnectGmail={handleConnectGmail} onLogin={() => navigateToPage("auth")} onOpenDashboard={handleDashboard} /> : null}
-          {publicPage === "product" ? <ProductPage /> : null}
-          {publicPage === "security" ? <SecurityPage /> : null}
-          {publicPage === "docs" ? <DocsPage /> : null}
+          {publicPage === "home" ? (
+            <HomePage
+              onConnectGmail={handleConnectGmail}
+              onLogin={() => navigateToPage("auth")}
+              onOpenDashboard={handleDashboard}
+              onNavigatePage={navigateToPage}
+            />
+          ) : null}
+          {publicPage === "product" ? (
+            <>
+              <ProductPage />
+              <SiteFooter onNavigatePage={navigateToPage} />
+            </>
+          ) : null}
+          {publicPage === "security" ? (
+            <>
+              <SecurityPage />
+              <SiteFooter onNavigatePage={navigateToPage} />
+            </>
+          ) : null}
+          {publicPage === "docs" ? (
+            <>
+              <DocsPage />
+              <SiteFooter onNavigatePage={navigateToPage} />
+            </>
+          ) : null}
+          {publicPage === "privacy" ? (
+            <>
+              <PrivacyPage />
+              <SiteFooter onNavigatePage={navigateToPage} />
+            </>
+          ) : null}
+          {publicPage === "terms" ? (
+            <>
+              <TermsPage />
+              <SiteFooter onNavigatePage={navigateToPage} />
+            </>
+          ) : null}
           {publicPage === "auth" ? (
             <AuthPage
               authMode={authMode}
@@ -293,10 +330,12 @@ function HomePage({
   onConnectGmail,
   onLogin,
   onOpenDashboard,
+  onNavigatePage,
 }: {
   onConnectGmail: () => void;
   onLogin: () => void;
   onOpenDashboard: () => void;
+  onNavigatePage: (page: PublicPage) => void;
 }) {
   return (
     <>
@@ -403,6 +442,12 @@ function HomePage({
         </div>
       </section>
 
+      <LandingExtras
+        onLogin={onLogin}
+        onConnectGmail={onConnectGmail}
+        onOpenDashboard={onOpenDashboard}
+      />
+
       <section className="px-6 pb-24">
         <div className={cn("mx-auto max-w-7xl p-8 md:p-10", landingGlass)}>
           <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:items-center">
@@ -416,7 +461,14 @@ function HomePage({
             </div>
             <div>
               <p className="text-lg leading-8 text-neutral-600 dark:text-neutral-300">
-                SpendLens usa OAuth 2.0 y permisos de solo lectura. Tus correos no se modifican.
+                SpendLens usa OAuth 2.0 y permisos de solo lectura. Tus correos no se modifican.{" "}
+                <button
+                  type="button"
+                  onClick={() => onNavigatePage("privacy")}
+                  className="text-[#2F80FF] underline hover:text-[#3BA3FF]"
+                >
+                  Política de privacidad
+                </button>
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 <PrivacyBadge label="Gmail readonly" />
@@ -429,6 +481,7 @@ function HomePage({
         </div>
       </section>
 
+      <SiteFooter onNavigatePage={onNavigatePage} />
     </>
   );
 }
@@ -497,6 +550,52 @@ function DocsPage() {
         <p className="mt-5 text-lg leading-8 text-neutral-600 dark:text-neutral-300">
           Frontend React/Vite, backend Spring Boot, PostgreSQL con Flyway, JWT, Gmail OAuth, sync de correos e importación de recibos desde texto.
         </p>
+      </div>
+    </section>
+  );
+}
+
+function PrivacyPage() {
+  return (
+    <section className="mx-auto max-w-3xl px-6 py-20">
+      <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Legal</p>
+      <h1 className="mt-4 text-4xl font-semibold text-neutral-950 dark:text-white">Política de privacidad</h1>
+      <div className="mt-8 space-y-6 text-neutral-600 dark:text-neutral-300">
+        <p>
+          SpendLens procesa datos de gastos que tú importas o registras. No vendemos tu información a terceros.
+        </p>
+        <p>
+          Al conectar Gmail autorizas acceso de solo lectura para detectar recibos. Los tokens OAuth se almacenan
+          cifrados en el backend. Puedes desconectar Gmail desde el dashboard en cualquier momento.
+        </p>
+        <p>
+          Conservamos gastos y metadatos mientras mantengas tu cuenta activa. Para eliminar datos, contacta al
+          administrador del despliegue o elimina tu cuenta según las políticas de tu instancia.
+        </p>
+        <p className="text-sm text-neutral-500">Última actualización: mayo 2026.</p>
+      </div>
+    </section>
+  );
+}
+
+function TermsPage() {
+  return (
+    <section className="mx-auto max-w-3xl px-6 py-20">
+      <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Legal</p>
+      <h1 className="mt-4 text-4xl font-semibold text-neutral-950 dark:text-white">Términos de uso</h1>
+      <div className="mt-8 space-y-6 text-neutral-600 dark:text-neutral-300">
+        <p>
+          SpendLens es una herramienta de organización personal. No constituye asesoría financiera, fiscal ni legal.
+        </p>
+        <p>
+          Eres responsable de la exactitud de los gastos importados y de mantener seguras tus credenciales. El servicio
+          se ofrece &quot;tal cual&quot; sin garantías de disponibilidad continua.
+        </p>
+        <p>
+          El uso de Gmail está sujeto a las políticas de Google. No modifiques ni reenvíes correos a través de la app
+          sin entender los permisos OAuth concedidos.
+        </p>
+        <p className="text-sm text-neutral-500">Última actualización: mayo 2026.</p>
       </div>
     </section>
   );
@@ -679,6 +778,210 @@ function AuthPage({
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function LandingExtras({
+  onLogin,
+  onConnectGmail,
+  onOpenDashboard,
+}: {
+  onLogin: () => void;
+  onConnectGmail: () => void;
+  onOpenDashboard: () => void;
+}) {
+  return (
+    <>
+      <section className="px-6 py-20">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Planes</p>
+          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+            Empieza gratis. Escala cuando lo necesites.
+          </h2>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            <PricingCard
+              name="Personal"
+              price="Gratis"
+              description="Ideal para ordenar gastos personales del mes."
+              features={["Dashboard mensual", "Gastos manuales", "Procesar recibo por texto", "Exportar CSV"]}
+              cta="Crear cuenta"
+              onCta={onLogin}
+            />
+            <PricingCard
+              name="Pro"
+              price="Próximamente"
+              description="Sincronización Gmail avanzada y categorías automáticas."
+              features={["Todo Personal", "Sync Gmail", "Recategorizar", "Exportar Excel y PDF"]}
+              highlighted
+              cta="Conectar Gmail"
+              onCta={onConnectGmail}
+            />
+            <PricingCard
+              name="Equipo"
+              price="A medida"
+              description="Para familias o pequeños equipos que comparten visibilidad."
+              features={["Múltiples cuentas (roadmap)", "Soporte prioritario", "API dedicada"]}
+              cta="Contactar"
+              onCta={onLogin}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-20">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Para quién es</p>
+          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+            Claridad financiera sin hojas de cálculo.
+          </h2>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            <AudienceCard
+              icon={<Users className="h-6 w-6" />}
+              title="Personas"
+              description="Entiende en qué se va tu dinero cada mes sin registrar todo a mano."
+            />
+            <AudienceCard
+              icon={<Briefcase className="h-6 w-6" />}
+              title="Freelancers"
+              description="Separa gastos personales y de trabajo importando recibos desde Gmail."
+            />
+            <AudienceCard
+              icon={<WalletCards className="h-6 w-6" />}
+              title="Familias"
+              description="Un solo panel para revisar compras, suscripciones y pagos recurrentes."
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-20">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Casos de uso</p>
+          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+            Lo que SpendLens resuelve hoy.
+          </h2>
+          <ul className="mt-10 grid gap-4 md:grid-cols-2">
+            {[
+              "Importar compras desde correos de Uber, Rappi o tiendas online.",
+              "Registrar un gasto en efectivo en segundos.",
+              "Filtrar por categoría, origen o monto y exportar el mes.",
+              "Recuperar contraseña y gestionar la conexión Gmail desde el dashboard.",
+            ].map((item) => (
+              <li key={item} className={cn("flex gap-3 rounded-2xl p-5", landingGlass)}>
+                <Check className="mt-0.5 h-5 w-5 shrink-0 text-[#3BA3FF]" />
+                <span className="text-neutral-700 dark:text-neutral-300">{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="px-6 pb-12">
+        <div className={cn("mx-auto max-w-4xl px-8 py-14 text-center", landingGlass)}>
+          <h2 className="font-serif text-3xl font-semibold text-neutral-950 dark:text-white md:text-4xl">
+            Empieza a ver tu mes con claridad.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-neutral-600 dark:text-neutral-400">
+            Conecta Gmail o crea tu cuenta y abre el dashboard en menos de un minuto.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Button onClick={onConnectGmail} className="rounded-full bg-[#2F80FF] px-7 py-6 hover:bg-[#3BA3FF]">
+              Conectar Gmail
+            </Button>
+            <Button variant="outline" onClick={onOpenDashboard} className="rounded-full px-7 py-6">
+              Ver dashboard
+            </Button>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function SiteFooter({ onNavigatePage }: { onNavigatePage: (page: PublicPage) => void }) {
+  return (
+    <footer className="border-t border-black/10 px-6 py-12 dark:border-white/10">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <p className="text-sm text-neutral-500">© {new Date().getFullYear()} SpendLens</p>
+        <nav className="flex flex-wrap gap-4 text-sm text-neutral-600 dark:text-neutral-400">
+          <button type="button" className="hover:text-neutral-950 dark:hover:text-white" onClick={() => onNavigatePage("home")}>
+            Inicio
+          </button>
+          <button type="button" className="hover:text-neutral-950 dark:hover:text-white" onClick={() => onNavigatePage("privacy")}>
+            Privacidad
+          </button>
+          <button type="button" className="hover:text-neutral-950 dark:hover:text-white" onClick={() => onNavigatePage("terms")}>
+            Términos
+          </button>
+          <button type="button" className="hover:text-neutral-950 dark:hover:text-white" onClick={() => onNavigatePage("docs")}>
+            Docs
+          </button>
+        </nav>
+      </div>
+    </footer>
+  );
+}
+
+function PricingCard({
+  name,
+  price,
+  description,
+  features,
+  cta,
+  onCta,
+  highlighted = false,
+}: {
+  name: string;
+  price: string;
+  description: string;
+  features: string[];
+  cta: string;
+  onCta: () => void;
+  highlighted?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-[2rem] p-7",
+        landingGlass,
+        highlighted && "ring-2 ring-[#2F80FF]/40 dark:ring-[#3BA3FF]/50",
+      )}
+    >
+      <h3 className="text-xl font-semibold text-neutral-950 dark:text-white">{name}</h3>
+      <p className="mt-2 text-3xl font-bold text-[#2F80FF] dark:text-[#3BA3FF]">{price}</p>
+      <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">{description}</p>
+      <ul className="mt-6 space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+        {features.map((feature) => (
+          <li key={feature} className="flex gap-2">
+            <Check className="h-4 w-4 shrink-0 text-[#3BA3FF]" />
+            {feature}
+          </li>
+        ))}
+      </ul>
+      <Button onClick={onCta} className="mt-8 w-full rounded-full bg-[#2F80FF] hover:bg-[#3BA3FF]">
+        {cta}
+      </Button>
+    </div>
+  );
+}
+
+function AudienceCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className={cn("rounded-[2rem] p-7", landingGlass)}>
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2F80FF]/10 text-[#3BA3FF]">
+        {icon}
+      </div>
+      <h3 className="text-xl font-semibold text-neutral-950 dark:text-white">{title}</h3>
+      <p className="mt-3 text-neutral-600 dark:text-neutral-400">{description}</p>
+    </div>
   );
 }
 
