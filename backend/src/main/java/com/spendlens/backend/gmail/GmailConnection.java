@@ -41,6 +41,15 @@ public class GmailConnection {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "last_synced_at")
+    private LocalDateTime lastSyncedAt;
+
+    @Column(nullable = false)
+    private boolean active = true;
+
+    @Column(name = "disconnected_at")
+    private LocalDateTime disconnectedAt;
+
     public GmailConnection() {
     }
 
@@ -106,5 +115,29 @@ public class GmailConnection {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getLastSyncedAt() {
+        return lastSyncedAt;
+    }
+
+    public void setLastSyncedAt(LocalDateTime lastSyncedAt) {
+        this.lastSyncedAt = lastSyncedAt;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public LocalDateTime getDisconnectedAt() {
+        return disconnectedAt;
+    }
+
+    public void setDisconnectedAt(LocalDateTime disconnectedAt) {
+        this.disconnectedAt = disconnectedAt;
     }
 }

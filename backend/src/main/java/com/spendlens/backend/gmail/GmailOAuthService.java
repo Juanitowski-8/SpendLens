@@ -7,6 +7,7 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.Profile;
+import com.spendlens.backend.auth.MessageResponse;
 import com.spendlens.backend.users.User;
 import com.spendlens.backend.users.UserRepository;
 import org.slf4j.Logger;
@@ -114,17 +115,55 @@ public class GmailOAuthService {
 
         connection.setExpiresAt(expiresAt);
         connection.setUpdatedAt(now);
+        connection.setActive(true);
+        connection.setDisconnectedAt(null);
 
         return connectionRepository.save(connection);
     }
 
     @Transactional(readOnly = true)
     public GmailConnection getConnectionForUser(String userEmail) {
-        return connectionRepository.findFirstByUser_EmailOrderByUpdatedAtDesc(normalizeEmail(userEmail))
+        return connectionRepository.findFirstByUser_EmailAndActiveTrueOrderByUpdatedAtDesc(normalizeEmail(userEmail))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Gmail is not connected for this user"
                 ));
+    }
+
+    @Transactional(readOnly = true)
+    public GmailStatusResponse getStatus(String userEmail) {
+        return connectionRepository
+                .findFirstByUser_EmailAndActiveTrueOrderByUpdatedAtDesc(normalizeEmail(userEmail))
+                .map(connection -> new GmailStatusResponse(
+                        true,
+                        connection.getGmailEmail(),
+                        connection.getLastSyncedAt(),
+                        connection.getCreatedAt()
+                ))
+                .orElse(new GmailStatusResponse(false, null, null, null));
+    }
+
+    public MessageResponse disconnect(String userEmail) {
+        connectionRepository
+                .findFirstByUser_EmailAndActiveTrueOrderByUpdatedAtDesc(normalizeEmail(userEmail))
+                .ifPresent(connection -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    connection.setActive(false);
+                    connection.setDisconnectedAt(now);
+                    connection.setUpdatedAt(now);
+                    connection.setAccessToken("");
+                    connection.setRefreshToken(null);
+                    connectionRepository.save(connection);
+                });
+
+        return new MessageResponse("Gmail desconectado correctamente.");
+    }
+
+    public void markSynced(GmailConnection connection) {
+        LocalDateTime now = LocalDateTime.now();
+        connection.setLastSyncedAt(now);
+        connection.setUpdatedAt(now);
+        connectionRepository.save(connection);
     }
 
     public GmailConnection refreshAccessTokenIfNeeded(GmailConnection connection) {

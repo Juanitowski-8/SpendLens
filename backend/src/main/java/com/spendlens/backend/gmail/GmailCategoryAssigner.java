@@ -10,7 +10,7 @@ import java.util.Map;
 @Component
 public class GmailCategoryAssigner {
 
-    private static final String UNCATEGORIZED = "Sin categoría";
+    public static final String DEFAULT_CATEGORY = "Otros";
 
     private static final Map<String, List<String>> CATEGORY_RULES = buildRules();
 
@@ -25,11 +25,11 @@ public class GmailCategoryAssigner {
             }
         }
 
-        return UNCATEGORIZED;
+        return DEFAULT_CATEGORY;
     }
 
-    public boolean hasAssignableCategory(String merchant, String subject, String snippet) {
-        return !UNCATEGORIZED.equals(assignCategory(merchant, subject, snippet));
+    public boolean hasSpecificCategory(String merchant, String subject, String snippet) {
+        return !DEFAULT_CATEGORY.equals(assignCategory(merchant, subject, snippet));
     }
 
     private static Map<String, List<String>> buildRules() {
@@ -61,7 +61,10 @@ public class GmailCategoryAssigner {
                 "farmatodo", "cruz verde", "droguería", "drogueria"
         ));
         rules.put("Servicios", List.of(
-                "claro", "movistar", "tigo", "enel", "acueducto", "gas natural"
+                "claro", "movistar", "tigo", "enel", "acueducto", "gas natural", "internet", "energia", "energía"
+        ));
+        rules.put("Entretenimiento", List.of(
+                "cine colombia", "cinemark", " cine ", "theater", "movie"
         ));
 
         return rules;

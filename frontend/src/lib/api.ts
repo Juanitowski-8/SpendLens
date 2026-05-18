@@ -21,6 +21,18 @@ export type GmailSyncResult = {
   importedCount: number;
   skippedCount: number;
   createdTransactions: Expense[];
+  skippedReasons?: Record<string, number>;
+};
+
+export type GmailStatus = {
+  connected: boolean;
+  gmailEmail: string | null;
+  lastSyncedAt: string | null;
+  createdAt: string | null;
+};
+
+export type MessageResult = {
+  message: string;
 };
 
 export async function connectGmail(): Promise<void> {
@@ -63,6 +75,53 @@ export async function recategorizeGmailTransactions(): Promise<GmailCountResult>
   });
 
   return handleResponse<GmailCountResult>(response);
+}
+
+export async function getSuspiciousGmailTransactions(): Promise<Expense[]> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/suspicious-transactions`, {
+    headers: getAuthHeaders(),
+  });
+
+  return handleResponse<Expense[]>(response);
+}
+
+export async function getGmailStatus(): Promise<GmailStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/status`, {
+    headers: getAuthHeaders(),
+  });
+
+  return handleResponse<GmailStatus>(response);
+}
+
+export async function disconnectGmail(): Promise<MessageResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/disconnect`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+
+  return handleResponse<MessageResult>(response);
+}
+
+export async function forgotPassword(email: string): Promise<MessageResult> {
+  ensureApiConfigured();
+  const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  return handleResponse<MessageResult>(response);
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<MessageResult> {
+  ensureApiConfigured();
+  const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, newPassword }),
+  });
+
+  return handleResponse<MessageResult>(response);
 }
 
 export type AuthResponse = {
@@ -136,6 +195,8 @@ export type CreateExpensePayload = {
   categoryId?: string | null;
 };
 
+export type UpdateExpensePayload = CreateExpensePayload;
+
 export type MockReceiptImportResult = {
   importedCount: number;
   skippedCount: number;
@@ -152,24 +213,68 @@ export type ParseTextImportResult = {
   createdTransactions: Expense[];
 };
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+    this.name = "ApiError";
+  }
+}
+
+function handleSessionExpired() {
+  localStorage.removeItem("spendlens_token");
+  if (window.location.pathname !== "/" && !window.location.search.includes("auth")) {
+    window.location.href = "/?auth=login&session=expired";
+  }
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
     return response.json() as Promise<T>;
   }
 
+  if (response.status === 401 || response.status === 403) {
+    handleSessionExpired();
+  }
+
   const message = await getErrorMessage(response);
-  throw new Error(`API request failed: ${message}`);
+  throw new ApiError(response.status, message);
 }
 
 async function getErrorMessage(response: Response): Promise<string> {
   try {
     const body = await response.text();
-
-    return body
-      ? `${response.status} ${response.statusText}: ${body}`
-      : `${response.status} ${response.statusText}`;
+    if (body) {
+      try {
+        const json = JSON.parse(body) as { message?: string; error?: string };
+        if (json.message) return json.message;
+        if (json.error) return json.error;
+      } catch {
+        if (body.length < 200) return body;
+      }
+    }
   } catch {
-    return `${response.status} ${response.statusText}`;
+    // ignore
+  }
+
+  switch (response.status) {
+    case 400:
+      return "Revisa los datos enviados e inténtalo de nuevo.";
+    case 401:
+      return "Correo o contraseña incorrectos.";
+    case 403:
+      return "Tu sesión expiró. Vuelve a iniciar sesión.";
+    case 409:
+      return "Ya existe una cuenta con este correo.";
+    case 502:
+    case 503:
+      return "No pudimos conectar con el servidor. Intenta de nuevo.";
+    default:
+      return response.status >= 500
+        ? "No pudimos conectar con el servidor. Intenta de nuevo."
+        : "No se pudo completar la solicitud.";
   }
 }
 
@@ -219,6 +324,16 @@ export async function getExpenses(year: number, month: number): Promise<Expense[
 export async function createExpense(payload: CreateExpensePayload): Promise<Expense> {
   const response = await fetch(`${API_BASE_URL}/api/auth/expenses`, {
     method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+
+  return handleResponse<Expense>(response);
+}
+
+export async function updateExpense(id: string, payload: UpdateExpensePayload): Promise<Expense> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/expenses/${id}`, {
+    method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(payload),
   });
@@ -290,8 +405,11 @@ export async function deleteExpense(id: string): Promise<void> {
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      handleSessionExpired();
+    }
     const message = await getErrorMessage(response);
-    throw new Error(`API request failed: ${message}`);
+    throw new ApiError(response.status, message);
   }
 }
 

@@ -69,7 +69,12 @@ public class GmailMaintenanceService {
 
         for (Transaction transaction : gmailTransactions) {
             if (transaction.getCategory() != null) {
-                continue;
+                String existing = transaction.getCategory().getName();
+                if (existing != null
+                        && !existing.equalsIgnoreCase("Otros")
+                        && !existing.equalsIgnoreCase("Sin categoría")) {
+                    continue;
+                }
             }
 
             ParsedEmailContent content = ParsedEmailContent.fromDescription(transaction.getDescription());
@@ -78,10 +83,6 @@ public class GmailMaintenanceService {
                     content.subject(),
                     content.snippet()
             );
-
-            if ("Sin categoría".equalsIgnoreCase(categoryName)) {
-                continue;
-            }
 
             Category category = categoryService.getOrCreateByName(normalizedEmail, categoryName);
             if (category == null) {

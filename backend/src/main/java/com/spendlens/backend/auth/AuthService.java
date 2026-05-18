@@ -31,7 +31,7 @@ public class AuthService {
         String email = normalizeEmail(request.getEmail());
 
         if (userRepository.existsByEmail(email)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already registered");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una cuenta con este correo.");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -59,10 +59,12 @@ public class AuthService {
         String email = normalizeEmail(request.getEmail());
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Correo o contraseña incorrectos."));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Correo o contraseña incorrectos.");
         }
 
         String token = jwtService.generateToken(user);

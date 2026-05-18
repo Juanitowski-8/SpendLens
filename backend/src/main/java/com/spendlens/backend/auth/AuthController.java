@@ -6,6 +6,7 @@ import com.spendlens.backend.dashboard.DashboardSummaryResponse;
 import com.spendlens.backend.transactions.CreateTransactionRequest;
 import com.spendlens.backend.transactions.TransactionResponse;
 import com.spendlens.backend.transactions.TransactionService;
+import com.spendlens.backend.transactions.UpdateTransactionRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -20,15 +21,18 @@ public class AuthController {
     private final AuthService authService;
     private final TransactionService transactionService;
     private final DashboardService dashboardService;
+    private final PasswordResetService passwordResetService;
 
     public AuthController(
             AuthService authService,
             TransactionService transactionService,
-            DashboardService dashboardService
+            DashboardService dashboardService,
+            PasswordResetService passwordResetService
     ) {
         this.authService = authService;
         this.transactionService = transactionService;
         this.dashboardService = dashboardService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/register")
@@ -39,6 +43,16 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/forgot-password")
+    public MessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return passwordResetService.requestPasswordReset(request.getEmail());
+    }
+
+    @PostMapping("/reset-password")
+    public MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return passwordResetService.resetPassword(request.getToken(), request.getNewPassword());
     }
 
     @GetMapping("/me")
@@ -61,6 +75,15 @@ public class AuthController {
             @Valid @RequestBody CreateTransactionRequest request
     ) {
         return transactionService.create(request, getEmail(authentication));
+    }
+
+    @PutMapping("/expenses/{id}")
+    public TransactionResponse updateExpense(
+            @PathVariable UUID id,
+            Authentication authentication,
+            @Valid @RequestBody UpdateTransactionRequest request
+    ) {
+        return transactionService.update(id, request, getEmail(authentication));
     }
 
     @DeleteMapping("/expenses/{id}")

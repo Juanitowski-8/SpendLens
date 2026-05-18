@@ -1,5 +1,6 @@
 package com.spendlens.backend.gmail;
 
+import com.spendlens.backend.auth.MessageResponse;
 import com.spendlens.backend.imports.MockReceiptImportResult;
 import com.spendlens.backend.users.User;
 import com.spendlens.backend.users.UserRepository;
@@ -98,6 +99,16 @@ public class GmailOAuthController {
     @PostMapping("/recategorize")
     public GmailCountResponse recategorize(Authentication authentication) {
         return gmailMaintenanceService.recategorizeGmailTransactions(getEmail(authentication));
+    }
+
+    @GetMapping("/status")
+    public GmailStatusResponse status(Authentication authentication) {
+        return gmailOAuthService.getStatus(getEmail(authentication));
+    }
+
+    @DeleteMapping("/disconnect")
+    public MessageResponse disconnect(Authentication authentication) {
+        return gmailOAuthService.disconnect(getEmail(authentication));
     }
 
     private UUID getUserId(Authentication authentication) {

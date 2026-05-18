@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public interface GmailConnectionRepository extends JpaRepository<GmailConnection, UUID> {
 
-    Optional<GmailConnection> findFirstByUser_EmailOrderByUpdatedAtDesc(String email);
+    Optional<GmailConnection> findFirstByUser_EmailAndActiveTrueOrderByUpdatedAtDesc(String email);
 
     Optional<GmailConnection> findByUser_IdAndGmailEmail(UUID userId, String gmailEmail);
 }

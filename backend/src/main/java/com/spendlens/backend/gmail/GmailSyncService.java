@@ -23,7 +23,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -77,6 +79,7 @@ public class GmailSyncService {
 
         int importedCount = 0;
         int skippedCount = 0;
+        Map<String, Integer> skippedReasons = new LinkedHashMap<>();
         List<TransactionResponse> createdTransactions = new ArrayList<>();
 
         try {
@@ -86,7 +89,8 @@ public class GmailSyncService {
                     .execute();
 
             if (listResponse.getMessages() == null || listResponse.getMessages().isEmpty()) {
-                return new MockReceiptImportResult(0, 0, createdTransactions);
+                gmailOAuthService.markSynced(connection);
+                return new MockReceiptImportResult(0, 0, createdTransactions, skippedReasons);
             }
 
             for (com.google.api.services.gmail.model.Message messageRef : listResponse.getMessages()) {
@@ -103,50 +107,40 @@ public class GmailSyncService {
 
                     if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
                         skippedCount++;
+                        bump(skippedReasons, "promotional");
                         continue;
                     }
 
                     Optional<GmailReceiptParser.ParsedGmailReceipt> parsedReceipt = receiptParser.parse(
-                            subject,
-                            snippet,
-                            from,
-                            internalDate
+                            subject, snippet, from, internalDate
                     );
 
                     if (parsedReceipt.isEmpty()) {
                         skippedCount++;
+                        bump(skippedReasons, "low_confidence");
                         continue;
                     }
 
                     GmailReceiptParser.ParsedGmailReceipt receipt = parsedReceipt.get();
 
                     if (!amountValidator.isReasonableAmount(
-                            receipt.amount(),
-                            receipt.currency(),
-                            receipt.merchant(),
-                            subject,
-                            snippet
+                            receipt.amount(), receipt.currency(), receipt.merchant(), subject, snippet
                     )) {
                         skippedCount++;
+                        bump(skippedReasons, "invalid_amount");
                         continue;
                     }
 
                     String normalizedMerchant = merchantNormalizer.normalize(receipt.merchant());
 
-                    if (isDuplicate(
-                            user.getId(),
-                            normalizedMerchant,
-                            receipt.amount(),
-                            receipt.transactionDate()
-                    )) {
+                    if (isDuplicate(user.getId(), normalizedMerchant, receipt.amount(), receipt.transactionDate())) {
                         skippedCount++;
+                        bump(skippedReasons, "duplicate");
                         continue;
                     }
 
-                    Category category = categoryService.getOrCreateByName(
-                            user.getEmail(),
-                            categoryAssigner.assignCategory(normalizedMerchant, subject, snippet)
-                    );
+                    String categoryName = categoryAssigner.assignCategory(normalizedMerchant, subject, snippet);
+                    Category category = categoryService.getOrCreateByName(user.getEmail(), categoryName);
 
                     LocalDateTime now = LocalDateTime.now();
                     Transaction transaction = new Transaction(
@@ -155,7 +149,7 @@ public class GmailSyncService {
                             category,
                             normalizedMerchant,
                             receipt.amount(),
-                            receipt.currency(),
+                            "COP",
                             receipt.transactionDate(),
                             receipt.description(),
                             TransactionSource.GMAIL,
@@ -168,9 +162,12 @@ public class GmailSyncService {
                     importedCount++;
                 } catch (Exception exception) {
                     skippedCount++;
+                    bump(skippedReasons, "error");
                     log.debug("Skipped Gmail message during sync");
                 }
             }
+
+            gmailOAuthService.markSynced(connection);
         } catch (IOException exception) {
             log.warn("Gmail sync failed");
             throw new org.springframework.web.server.ResponseStatusException(
@@ -179,21 +176,16 @@ public class GmailSyncService {
             );
         }
 
-        return new MockReceiptImportResult(importedCount, skippedCount, createdTransactions);
+        return new MockReceiptImportResult(importedCount, skippedCount, createdTransactions, skippedReasons);
     }
 
-    private boolean isDuplicate(
-            UUID userId,
-            String merchant,
-            BigDecimal amount,
-            LocalDate transactionDate
-    ) {
+    private void bump(Map<String, Integer> reasons, String key) {
+        reasons.merge(key, 1, Integer::sum);
+    }
+
+    private boolean isDuplicate(UUID userId, String merchant, BigDecimal amount, LocalDate transactionDate) {
         return transactionRepository.existsByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountAndTransactionDate(
-                userId,
-                TransactionSource.GMAIL,
-                merchant,
-                amount,
-                transactionDate
+                userId, TransactionSource.GMAIL, merchant, amount, transactionDate
         );
     }
 
@@ -201,13 +193,11 @@ public class GmailSyncService {
         if (message.getPayload() == null || message.getPayload().getHeaders() == null) {
             return "";
         }
-
         for (MessagePartHeader header : message.getPayload().getHeaders()) {
             if (headerName.equalsIgnoreCase(header.getName())) {
                 return header.getValue() == null ? "" : header.getValue();
             }
         }
-
         return "";
     }
 }

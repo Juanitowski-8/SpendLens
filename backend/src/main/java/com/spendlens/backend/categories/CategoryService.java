@@ -94,7 +94,7 @@ public class CategoryService {
         String normalizedEmail = normalizeEmail(email);
         String name = categoryName.trim();
 
-        if (name.isBlank() || "Sin categoría".equalsIgnoreCase(name)) {
+        if (name.isBlank()) {
             return null;
         }
 

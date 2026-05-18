@@ -15,14 +15,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DashboardView } from "@/components/DashboardView";
 import { Navbar } from "@/components/Navbar";
 import { PremiumBackground } from "@/components/PremiumBackground";
-import { connectGmail, isApiConfigured, login, logout, register } from "@/lib/api";
+import {
+  connectGmail,
+  forgotPassword,
+  isApiConfigured,
+  login,
+  logout,
+  register,
+  resetPassword,
+} from "@/lib/api";
 import type { LoginRequest, RegisterRequest } from "@/lib/api";
 import type { PublicPage } from "@/types/navigation";
 
 export type { PublicPage } from "@/types/navigation";
 
 type AppView = "public" | "dashboard";
-type AuthMode = "login" | "register";
+type AuthMode = "login" | "register" | "forgot" | "reset";
 
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -45,6 +53,8 @@ export default function App() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("juano@test.com");
   const [password, setPassword] = useState("password123");
+  const [resetToken, setResetToken] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +120,24 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const token = params.get("resetToken");
+    if (token) {
+      setResetToken(token);
+      setAuthMode("reset");
+      navigateToPage("auth");
+    }
+    if (params.get("auth") === "login") {
+      setAuthMode("login");
+      navigateToPage("auth");
+    }
+    if (params.get("session") === "expired") {
+      setError("Tu sesión expiró. Vuelve a iniciar sesión.");
+      navigateToPage("auth");
+    }
+  }, [navigateToPage]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     const gmailStatus = params.get("gmail");
 
     if (!gmailStatus) {
@@ -136,6 +164,23 @@ export default function App() {
     setMessage(null);
 
     try {
+      if (authMode === "forgot") {
+        const result = await forgotPassword(email);
+        setMessage(result.message);
+        return;
+      }
+
+      if (authMode === "reset") {
+        if (password !== confirmPassword) {
+          setError("Las contraseñas no coinciden.");
+          return;
+        }
+        const result = await resetPassword(resetToken, password);
+        setMessage(result.message);
+        setAuthMode("login");
+        return;
+      }
+
       if (authMode === "login") {
         await login({ email, password } as LoginRequest);
         setMessage("Inicio de sesión correcto. Abriendo dashboard...");
@@ -151,11 +196,30 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [authMode, email, name, openDashboard, password]);
+  }, [authMode, confirmPassword, email, name, openDashboard, password, resetToken]);
 
-  const authTitle = authMode === "login" ? "Inicia sesión en SpendLens" : "Crea tu cuenta";
-  const submitLabel = authMode === "login" ? "Entrar" : "Registrar";
-  const switchLabel = authMode === "login" ? "Crear cuenta" : "Ya tengo cuenta";
+  const authTitle =
+    authMode === "login"
+      ? "Inicia sesión en SpendLens"
+      : authMode === "register"
+        ? "Crea tu cuenta"
+        : authMode === "forgot"
+          ? "Recuperar contraseña"
+          : "Nueva contraseña";
+  const submitLabel =
+    authMode === "login"
+      ? "Entrar"
+      : authMode === "register"
+        ? "Registrar"
+        : authMode === "forgot"
+          ? "Enviar instrucciones"
+          : "Cambiar contraseña";
+  const switchLabel =
+    authMode === "login"
+      ? "Crear cuenta"
+      : authMode === "register"
+        ? "Ya tengo cuenta"
+        : "Volver al inicio de sesión";
 
   const navbarActivePage: PublicPage = appView === "dashboard" ? "home" : publicPage;
 
@@ -194,6 +258,15 @@ export default function App() {
               onNameChange={setName}
               onEmailChange={setEmail}
               onPasswordChange={setPassword}
+              resetToken={resetToken}
+              confirmPassword={confirmPassword}
+              onResetTokenChange={setResetToken}
+              onConfirmPasswordChange={setConfirmPassword}
+              onForgotPassword={() => {
+                setAuthMode("forgot");
+                setError(null);
+                setMessage(null);
+              }}
               onSubmit={handleSubmit}
               onAuthModeChange={handleAuthModeChange}
             />
@@ -443,6 +516,11 @@ function AuthPage({
   onNameChange,
   onEmailChange,
   onPasswordChange,
+  resetToken,
+  confirmPassword,
+  onResetTokenChange,
+  onConfirmPasswordChange,
+  onForgotPassword,
   onSubmit,
   onAuthModeChange,
 }: {
@@ -453,12 +531,17 @@ function AuthPage({
   name: string;
   email: string;
   password: string;
+  resetToken: string;
+  confirmPassword: string;
   loading: boolean;
   message: string | null;
   error: string | null;
   onNameChange: (value: string) => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onResetTokenChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onForgotPassword: () => void;
   onSubmit: () => void;
   onAuthModeChange: (mode: AuthMode) => void;
 }) {
@@ -509,27 +592,62 @@ function AuthPage({
             </label>
           ) : null}
 
-          <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
-            <span>Correo electrónico</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => onEmailChange(event.target.value)}
-              placeholder="tu@correo.com"
-              className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
-            />
-          </label>
+          {authMode === "reset" ? (
+            <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+              <span>Token de recuperación</span>
+              <input
+                value={resetToken}
+                onChange={(event) => onResetTokenChange(event.target.value)}
+                placeholder="Pega el token del enlace"
+                className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </label>
+          ) : null}
 
-          <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
-            <span>Contraseña</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="********"
-              className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
-            />
-          </label>
+          {authMode !== "reset" ? (
+            <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+              <span>Correo electrónico</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => onEmailChange(event.target.value)}
+                placeholder="tu@correo.com"
+                className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </label>
+          ) : null}
+
+          {authMode !== "forgot" ? (
+            <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+              <span>{authMode === "reset" ? "Nueva contraseña" : "Contraseña"}</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => onPasswordChange(event.target.value)}
+                placeholder="********"
+                className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </label>
+          ) : null}
+
+          {authMode === "reset" ? (
+            <label className="block space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+              <span>Confirmar contraseña</span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => onConfirmPasswordChange(event.target.value)}
+                placeholder="********"
+                className="w-full rounded-2xl border border-black/10 bg-white/80 px-4 py-3 text-neutral-950 outline-none transition focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </label>
+          ) : null}
+
+          {authMode === "login" ? (
+            <button type="button" onClick={onForgotPassword} className="text-sm text-[#2F80FF] hover:text-[#3BA3FF]">
+              Olvidé mi contraseña
+            </button>
+          ) : null}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
@@ -537,16 +655,26 @@ function AuthPage({
               disabled={loading}
               className="min-w-[150px] rounded-full bg-[#2F80FF] px-6 py-5 font-semibold text-white transition hover:bg-[#3BA3FF]"
             >
-              {loading ? "Cargando..." : submitLabel}
+              {loading ? "Enviando..." : submitLabel}
             </Button>
 
-            <button
-              type="button"
-              onClick={() => onAuthModeChange(authMode === "login" ? "register" : "login")}
-              className="text-sm text-neutral-500 transition hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white"
-            >
-              {switchLabel}
-            </button>
+            {authMode === "login" || authMode === "register" ? (
+              <button
+                type="button"
+                onClick={() => onAuthModeChange(authMode === "login" ? "register" : "login")}
+                className="text-sm text-neutral-500 transition hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white"
+              >
+                {switchLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onAuthModeChange("login")}
+                className="text-sm text-neutral-500 transition hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white"
+              >
+                {switchLabel}
+              </button>
+            )}
           </div>
         </CardContent>
       </Card>

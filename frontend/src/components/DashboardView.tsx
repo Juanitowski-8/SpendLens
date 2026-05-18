@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn, displayCategoryName, formatCurrencyCOP } from "@/lib/utils";
 import {
   getDashboardSummary,
   getCategoryBreakdown,
@@ -37,10 +37,15 @@ import {
   importMockReceipts,
   importReceiptText,
   deleteExpense,
+  updateExpense,
   syncGmail,
   deleteSuspiciousGmailTransactions,
   recategorizeGmailTransactions,
+  getGmailStatus,
+  disconnectGmail,
+  connectGmail,
 } from "@/lib/api";
+import type { GmailStatus } from "@/lib/api";
 import type {
   Expense,
   DashboardSummary,
@@ -121,11 +126,24 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const [gmailMaintenanceMessage, setGmailMaintenanceMessage] = useState<string | null>(null);
   const [gmailMaintenanceError, setGmailMaintenanceError] = useState<string | null>(null);
 
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
+  const [disconnectingGmail, setDisconnectingGmail] = useState(false);
+
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editMerchant, setEditMerchant] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDate, setEditDate] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   const formatAmount = useCallback((value: number | null | undefined, currencyCode = "COP") => {
+    if (currencyCode === "COP") {
+      return formatCurrencyCOP(value);
+    }
     if (value == null || Number.isNaN(value)) {
       return "--";
     }
-
     return new Intl.NumberFormat("es-CO", {
       style: "currency",
       currency: currencyCode,
@@ -181,6 +199,19 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   useEffect(() => {
     void loadDashboard(selectedPeriod);
   }, [selectedPeriod, loadDashboard]);
+
+  const refreshGmailStatus = useCallback(async () => {
+    try {
+      const status = await getGmailStatus();
+      setGmailStatus(status);
+    } catch {
+      setGmailStatus({ connected: false, gmailEmail: null, lastSyncedAt: null, createdAt: null });
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshGmailStatus();
+  }, [refreshGmailStatus]);
 
   const handleSelectPeriod = (period: DashboardPeriod) => {
     setSelectedPeriod(period);
@@ -238,9 +269,10 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     try {
       const result = await syncGmail();
       setSyncMessage(
-        `Importados ${result.importedCount} gastos desde Gmail · ${result.skippedCount} correos omitidos (sin monto o duplicados).`,
+        `Importados: ${result.importedCount} · Omitidos por baja confianza: ${result.skippedCount}`,
       );
       await loadDashboard();
+      await refreshGmailStatus();
       setSyncPhase("completed");
     } catch (err) {
       setSyncPhase("idle");
@@ -329,6 +361,61 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
       setParseError(err instanceof Error ? err.message : "Error al procesar el texto del recibo");
     } finally {
       setParsingReceipt(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    const confirmed = window.confirm("¿Desconectar Gmail? Tus gastos importados se conservarán.");
+    if (!confirmed) return;
+
+    setDisconnectingGmail(true);
+    setSyncError(null);
+    try {
+      const result = await disconnectGmail();
+      setSyncMessage(result.message);
+      await refreshGmailStatus();
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "No se pudo desconectar Gmail");
+    } finally {
+      setDisconnectingGmail(false);
+    }
+  };
+
+  const openEditExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditMerchant(expense.merchant);
+    setEditAmount(String(expense.amount));
+    setEditDate(expense.transactionDate);
+    setEditDescription(expense.description ?? "");
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExpense) return;
+    const num = Number(editAmount);
+    if (!editMerchant.trim() || Number.isNaN(num) || num <= 0) {
+      setEditError("Completa comercio y monto válido.");
+      return;
+    }
+
+    setSavingEdit(true);
+    setEditError(null);
+    try {
+      await updateExpense(editingExpense.id, {
+        merchant: editMerchant.trim(),
+        amount: num,
+        currency: "COP",
+        transactionDate: editDate,
+        description: editDescription.trim() || undefined,
+        categoryId: editingExpense.categoryId,
+      });
+      setEditingExpense(null);
+      setSuccessMessage("Gasto actualizado correctamente.");
+      await loadDashboard();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Error al actualizar gasto");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -479,6 +566,44 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
               </div>
             </div>
           </header>
+
+          <section className={cn(glassCard, "p-5 sm:p-6")} aria-label="Estado Gmail">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-950 dark:text-white">Conexión Gmail</h2>
+                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                  {gmailStatus?.connected
+                    ? `Conectado como ${gmailStatus.gmailEmail ?? "—"}`
+                    : "Gmail no conectado"}
+                </p>
+                {gmailStatus?.connected && gmailStatus.lastSyncedAt ? (
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Última sincronización:{" "}
+                    {new Date(gmailStatus.lastSyncedAt).toLocaleString("es-CO")}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {gmailStatus?.connected ? (
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={disconnectingGmail}
+                    onClick={() => void handleDisconnectGmail()}
+                  >
+                    {disconnectingGmail ? "Desconectando…" : "Desconectar Gmail"}
+                  </Button>
+                ) : (
+                  <Button
+                    className="rounded-full bg-[#2F80FF] hover:bg-[#3BA3FF]"
+                    onClick={() => void connectGmail()}
+                  >
+                    Conectar Gmail
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
 
           <section className={cn(glassCard, "p-5 sm:p-6")} aria-label="Acciones rápidas">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -876,7 +1001,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       ) : expenses.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="py-12 text-center text-neutral-500">
-                            No hay gastos. Sincroniza Gmail o crea uno manual.
+                            Aún no tienes gastos este mes. Crea un gasto o sincroniza Gmail.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -900,7 +1025,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                                     : "bg-black/5 text-neutral-500 dark:bg-white/10 dark:text-neutral-400",
                                 )}
                               >
-                                {expense.categoryName ?? "Sin categoría"}
+                                {displayCategoryName(expense.categoryName)}
                               </span>
                             </TableCell>
                             <TableCell className="font-semibold tabular-nums text-neutral-950 dark:text-white">
@@ -910,15 +1035,25 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                               <SourceBadge source={expense.source} />
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="rounded-full"
-                                onClick={() => handleDeleteExpense(expense)}
-                                disabled={deletingExpenseId === expense.id}
-                              >
-                                {deletingExpenseId === expense.id ? "…" : "Eliminar"}
-                              </Button>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-full"
+                                  onClick={() => openEditExpense(expense)}
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-full"
+                                  onClick={() => handleDeleteExpense(expense)}
+                                  disabled={deletingExpenseId === expense.id}
+                                >
+                                  {deletingExpenseId === expense.id ? "…" : "Eliminar"}
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -929,6 +1064,38 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
               </CardContent>
             </Card>
           </section>
+
+          {editingExpense ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+              <div className={cn(glassCard, "w-full max-w-lg p-6")}>
+                <h3 className="text-lg font-semibold text-neutral-950 dark:text-white">Editar gasto</h3>
+                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{editingExpense.merchant}</p>
+                <div className="mt-4 space-y-3">
+                  <Field label="Comercio">
+                    <input className={inputClass} value={editMerchant} onChange={(e) => setEditMerchant(e.target.value)} />
+                  </Field>
+                  <Field label="Monto (COP)">
+                    <input className={inputClass} type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+                  </Field>
+                  <Field label="Fecha">
+                    <input className={inputClass} type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                  </Field>
+                  <Field label="Descripción">
+                    <input className={inputClass} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+                  </Field>
+                  {editError ? <p className="text-sm text-red-600">{editError}</p> : null}
+                </div>
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button variant="outline" className="rounded-full" onClick={() => setEditingExpense(null)}>
+                    Cancelar
+                  </Button>
+                  <Button className="rounded-full bg-[#2F80FF]" disabled={savingEdit} onClick={() => void handleSaveEdit()}>
+                    {savingEdit ? "Guardando…" : "Guardar"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <footer className="mt-8 rounded-[1.75rem] border border-black/10 bg-white/60 px-5 py-4 text-sm leading-relaxed text-neutral-600 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-400">
             <p>
