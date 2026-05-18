@@ -1,0 +1,11 @@
+frontend/
+.git/
+**/.git
+**/target/
+**/node_modules/
+**/.env
+**/.env.*
+**/application-local.properties
+frontend/src_backup_before_v0/
+frontend/v0-reference/
+/src/
