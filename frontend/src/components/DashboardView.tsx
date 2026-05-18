@@ -7,11 +7,13 @@ import {
   List,
   Mail,
   MoreHorizontal,
+  Download,
   Plus,
   RefreshCw,
   Sparkles,
   TrendingUp,
   Wallet,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -27,6 +29,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  collectCategoryOptions,
+  DEFAULT_EXPENSE_FILTERS,
+  filterAndSortExpenses,
+  hasActiveFilters,
+  type ExpenseFilterState,
+} from "@/lib/expenseFilters";
+import { exportExpensesCsv, exportExpensesExcel, exportSummaryPdf } from "@/lib/export";
 import { cn, displayCategoryName, formatCurrencyCOP } from "@/lib/utils";
 import {
   getDashboardSummary,
@@ -136,6 +146,17 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const [editDescription, setEditDescription] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const [expenseFilters, setExpenseFilters] = useState<ExpenseFilterState>(DEFAULT_EXPENSE_FILTERS);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  const categoryOptions = useMemo(() => collectCategoryOptions(expenses), [expenses]);
+
+  const filteredExpenses = useMemo(
+    () => filterAndSortExpenses(expenses, expenseFilters),
+    [expenses, expenseFilters],
+  );
 
   const formatAmount = useCallback((value: number | null | undefined, currencyCode = "COP") => {
     if (currencyCode === "COP") {
@@ -452,6 +473,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     push("sync", "success", syncMessage);
     push("gmail-maint", "success", gmailMaintenanceMessage);
     push("gmail-maint-error", "error", gmailMaintenanceError);
+    push("export", "success", exportMessage);
     push("delete-error", "error", deleteError);
     push("delete", "success", deleteMessage);
     push("parse-error", "error", parseError);
@@ -469,7 +491,49 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     syncMessage,
     gmailMaintenanceMessage,
     gmailMaintenanceError,
+    exportMessage,
   ]);
+
+  const handleExportCsv = () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      exportExpensesCsv(filteredExpenses, selectedPeriod.label);
+      setExportMessage("Datos exportados en CSV.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al exportar");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      await exportExpensesExcel(filteredExpenses, selectedPeriod.label);
+      setExportMessage("Datos exportados en Excel.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al exportar");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      exportSummaryPdf(selectedPeriod.label, summary, filteredExpenses, categoryBreakdown);
+      setExportMessage("Resumen PDF listo para imprimir o guardar.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al exportar PDF");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const clearFilters = () => setExpenseFilters(DEFAULT_EXPENSE_FILTERS);
 
   const gmailCount = expenses.filter((e) => e.source === "GMAIL").length;
   const manualCount = expenses.filter((e) => e.source === "MANUAL").length;
@@ -690,6 +754,19 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       }}
                     >
                       {recategorizingGmail ? "Recategorizando…" : "Recategorizar Gmail"}
+                    </DropdownMenuItem>
+                    <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
+                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); handleExportCsv(); }}>
+                      <Download className="mr-2 size-4" />
+                      {exporting ? "Exportando…" : "Exportar CSV"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); void handleExportExcel(); }}>
+                      <Download className="mr-2 size-4" />
+                      Exportar Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); handleExportPdf(); }}>
+                      <Download className="mr-2 size-4" />
+                      Exportar resumen PDF
                     </DropdownMenuItem>
                     <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
                     <DropdownMenuItem
@@ -969,8 +1046,91 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
           <section ref={tableRef} className="scroll-mt-28" aria-label="Tabla de transacciones">
             <SectionTitle
               title="Todas las transacciones"
-              description="Lista completa de gastos. Puedes eliminar registros incorrectos."
+              description={`${filteredExpenses.length} de ${expenses.length} gastos visibles. Filtra, ordena o exporta desde el menú de acciones.`}
             />
+            <div className="mt-4 space-y-3 rounded-2xl border border-black/10 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <Field label="Buscar">
+                  <input
+                    aria-label="Buscar transacciones"
+                    placeholder="Comercio, categoría…"
+                    value={expenseFilters.searchText}
+                    onChange={(e) => setExpenseFilters((f) => ({ ...f, searchText: e.target.value }))}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Categoría">
+                  <select
+                    aria-label="Filtrar por categoría"
+                    value={expenseFilters.category}
+                    onChange={(e) => setExpenseFilters((f) => ({ ...f, category: e.target.value }))}
+                    className={inputClass}
+                  >
+                    <option value="ALL">Todas</option>
+                    {categoryOptions.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Origen">
+                  <select
+                    aria-label="Filtrar por origen"
+                    value={expenseFilters.source}
+                    onChange={(e) =>
+                      setExpenseFilters((f) => ({ ...f, source: e.target.value as ExpenseFilterState["source"] }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="ALL">Todos</option>
+                    <option value="GMAIL">Gmail</option>
+                    <option value="MANUAL">Manual</option>
+                  </select>
+                </Field>
+                <Field label="Monto mín.">
+                  <input
+                    aria-label="Monto mínimo"
+                    type="number"
+                    placeholder="0"
+                    value={expenseFilters.minAmount}
+                    onChange={(e) => setExpenseFilters((f) => ({ ...f, minAmount: e.target.value }))}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Monto máx.">
+                  <input
+                    aria-label="Monto máximo"
+                    type="number"
+                    placeholder="Sin límite"
+                    value={expenseFilters.maxAmount}
+                    onChange={(e) => setExpenseFilters((f) => ({ ...f, maxAmount: e.target.value }))}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Ordenar">
+                  <select
+                    aria-label="Ordenar transacciones"
+                    value={expenseFilters.sort}
+                    onChange={(e) =>
+                      setExpenseFilters((f) => ({ ...f, sort: e.target.value as ExpenseFilterState["sort"] }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="date-desc">Fecha (reciente)</option>
+                    <option value="date-asc">Fecha (antigua)</option>
+                    <option value="amount-desc">Monto (mayor)</option>
+                    <option value="amount-asc">Monto (menor)</option>
+                  </select>
+                </Field>
+              </div>
+              {hasActiveFilters(expenseFilters) ? (
+                <Button variant="outline" size="sm" className="rounded-full" onClick={clearFilters}>
+                  <X className="mr-1 size-3.5" />
+                  Limpiar filtros
+                </Button>
+              ) : null}
+            </div>
             <Card className={cn("mt-4 overflow-hidden", glassCard, "border-0 bg-transparent p-0 shadow-none")}>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -1004,8 +1164,17 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                             Aún no tienes gastos este mes. Crea un gasto o sincroniza Gmail.
                           </TableCell>
                         </TableRow>
+                      ) : filteredExpenses.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-12 text-center text-neutral-500">
+                            Ningún gasto coincide con los filtros.{" "}
+                            <button type="button" className="text-[#2F80FF] underline" onClick={clearFilters}>
+                              Limpiar filtros
+                            </button>
+                          </TableCell>
+                        </TableRow>
                       ) : (
-                        expenses.map((expense) => (
+                        filteredExpenses.map((expense) => (
                           <TableRow
                             key={expense.id}
                             className="border-black/10 dark:border-white/10"
