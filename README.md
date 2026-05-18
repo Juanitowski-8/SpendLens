@@ -52,16 +52,33 @@ cd ..\backend
 ## API principal (JWT)
 
 - `POST /api/auth/register`, `POST /api/auth/login`
-- `GET|POST|DELETE /api/auth/expenses`
-- `GET /api/auth/dashboard/summary`, `category-breakdown`, `recent-expenses`
+- `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`
+- `GET|POST|PUT|DELETE /api/auth/expenses`
+- `GET /api/auth/dashboard/summary?year=&month=`, `category-breakdown`, `recent-expenses`
 - `POST /api/auth/imports/mock-receipts`, `parse-text`
-- `GET /api/auth/gmail/connect-url` (JWT), `GET /api/auth/gmail/callback`, `POST /api/auth/gmail/sync`
+- `GET /api/auth/gmail/connect-url`, `GET /api/auth/gmail/callback`, `POST /api/auth/gmail/sync`
+- `GET /api/auth/gmail/status`, `DELETE /api/auth/gmail/disconnect`
+- `GET|DELETE /api/auth/gmail/suspicious-transactions`, `POST /api/auth/gmail/recategorize`
+
+## Funcionalidades
+
+- Dashboard por mes con totales en COP
+- Importación Gmail (OAuth solo lectura), validación de montos, categorías y FX
+- Gastos manuales, edición, eliminación y procesamiento de recibo por texto
+- Filtros avanzados en tabla y exportación CSV / Excel / PDF
+- Recuperación de contraseña y desconexión de Gmail
 
 ## Deploy en producción
 
-Ver **[DEPLOY.md](./DEPLOY.md)** (Vercel + Render/Railway/Fly.io + Neon + Google OAuth).
+Ver **[DEPLOY.md](./DEPLOY.md)** (Vercel + Render + Neon + Google OAuth).
+
+Tras cada push a `master`:
+
+1. **Vercel**: redeploy del frontend con `VITE_API_URL` apuntando al backend.
+2. **Render**: redeploy del backend (aplica migraciones Flyway V5+).
 
 ## Documentación
 
+- `DEPLOY.md` — pasos de despliegue
+- `SECURITY.md` — secretos, OAuth y rotación
 - `docs/FRONTEND_ENV.md` — variables del frontend
-- `DROP_OFF.md` — notas de estado del proyecto
