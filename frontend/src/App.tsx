@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Mail, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
+import {
+  ArrowRight,
+  LayoutDashboard,
+  Mail,
+  ScanLine,
+  ShieldCheck,
+  Sparkles,
+  WalletCards,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardView } from "@/components/DashboardView";
 import { Navbar } from "@/components/Navbar";
 import { PremiumBackground } from "@/components/PremiumBackground";
-import { connectGmail, login, logout, register } from "@/lib/api";
+import { connectGmail, isApiConfigured, login, logout, register } from "@/lib/api";
 import type { LoginRequest, RegisterRequest } from "@/lib/api";
 import type { PublicPage } from "@/types/navigation";
 
@@ -18,6 +27,9 @@ type AuthMode = "login" | "register";
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
+
+const landingGlass =
+  "rounded-[2rem] border border-black/10 bg-white/75 shadow-[0_30px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.05] dark:shadow-[0_30px_90px_rgba(0,0,0,0.28)]";
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() =>
@@ -149,6 +161,7 @@ export default function App() {
 
   return (
     <PremiumBackground>
+      {!isApiConfigured ? <DeployConfigWarning /> : null}
       <Navbar
         isAuthenticated={isAuthenticated}
         activePage={navbarActivePage}
@@ -188,6 +201,18 @@ export default function App() {
         </main>
       )}
     </PremiumBackground>
+  );
+}
+
+function DeployConfigWarning() {
+  return (
+    <div
+      role="alert"
+      className="relative z-[60] border-b border-amber-500/30 bg-amber-500/15 px-6 py-3 text-center text-sm text-amber-950 dark:text-amber-100"
+    >
+      Falta <strong className="font-semibold">VITE_API_URL</strong> en Vercel. Define la URL pública del backend (Render)
+      y vuelve a desplegar. Sin eso, login y dashboard no funcionan para otros usuarios.
+    </div>
   );
 }
 
@@ -243,17 +268,56 @@ function HomePage({
       </section>
 
       <section className="px-6 py-20">
-        <div className="mx-auto max-w-7xl rounded-[2rem] border border-black/10 bg-white/75 p-8 shadow-[0_30px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_30px_90px_rgba(0,0,0,0.28)]">
-          <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">Dashboard</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
-                Del recibo al resumen financiero.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-neutral-600 dark:text-neutral-300">
-                Entra al dashboard para ver totales, procesar recibos, importar gastos de prueba y gestionar transacciones.
-              </p>
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">
+            Cómo funciona
+          </p>
+          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+            De Gmail a claridad financiera en tres pasos.
+          </h2>
 
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            <StepCard
+              step="01"
+              icon={<Mail className="h-6 w-6" />}
+              title="Conecta Gmail"
+              description="Autoriza acceso de solo lectura mediante OAuth."
+            />
+            <StepCard
+              step="02"
+              icon={<ScanLine className="h-6 w-6" />}
+              title="Detectamos recibos"
+              description="SpendLens identifica compras, pagos y facturas relevantes."
+            />
+            <StepCard
+              step="03"
+              icon={<LayoutDashboard className="h-6 w-6" />}
+              title="Visualiza tu mes"
+              description="Consulta totales, comercios y transacciones en un dashboard limpio."
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 pb-20">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">
+            Vista previa
+          </p>
+          <h2 className="mt-4 max-w-3xl font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+            Todo tu mes financiero en una sola vista.
+          </h2>
+          <p className="mt-4 max-w-2xl text-lg leading-8 text-neutral-600 dark:text-neutral-400">
+            Métricas, gráficos y transacciones listas para revisar.
+          </p>
+
+          <div className="mt-10 flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <DashboardPreviewMockup />
+            <div className="lg:max-w-sm">
+              <p className="text-base leading-7 text-neutral-600 dark:text-neutral-400">
+                Un panel diseñado para entender tus gastos en segundos: totales del mes, promedio por
+                transacción y detalle por comercio.
+              </p>
               <Button
                 onClick={onOpenDashboard}
                 className="mt-8 rounded-full bg-[#2F80FF] px-7 py-6 text-base font-semibold text-white shadow-[0_20px_60px_rgba(47,128,255,0.30)] transition hover:bg-[#3BA3FF]"
@@ -262,16 +326,36 @@ function HomePage({
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <PreviewMetric label="Total mensual" value="$757.946" />
-              <PreviewMetric label="Número de gastos" value="10" />
-              <PreviewMetric label="Promedio" value="$75.795" />
-              <PreviewMetric label="Moneda" value="COP" />
+      <section className="px-6 pb-24">
+        <div className={cn("mx-auto max-w-7xl p-8 md:p-10", landingGlass)}>
+          <div className="grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">
+                Privacidad
+              </p>
+              <h2 className="mt-4 font-serif text-4xl font-semibold tracking-tight text-neutral-950 dark:text-white md:text-5xl">
+                Privacidad por diseño.
+              </h2>
+            </div>
+            <div>
+              <p className="text-lg leading-8 text-neutral-600 dark:text-neutral-300">
+                SpendLens usa OAuth 2.0 y permisos de solo lectura. Tus correos no se modifican.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <PrivacyBadge label="Gmail readonly" />
+                <PrivacyBadge label="JWT seguro" />
+                <PrivacyBadge label="OAuth 2.0" />
+                <PrivacyBadge label="PostgreSQL" />
+              </div>
             </div>
           </div>
         </div>
       </section>
+
     </>
   );
 }
@@ -490,11 +574,103 @@ function FeatureCard({
   );
 }
 
-function PreviewMetric({ label, value }: { label: string; value: string }) {
+function StepCard({
+  step,
+  icon,
+  title,
+  description,
+}: {
+  step: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
-    <div className="rounded-[1.5rem] border border-black/10 bg-white/70 p-6 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04]">
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-neutral-950 dark:text-white">{value}</p>
+    <div
+      className={cn(
+        "group rounded-[2rem] p-7 transition hover:-translate-y-0.5",
+        landingGlass,
+        "hover:border-[#2F80FF]/30 hover:shadow-[0_35px_100px_rgba(47,128,255,0.14)] dark:hover:border-[#3BA3FF]/35",
+      )}
+    >
+      <div className="mb-6 flex items-start justify-between">
+        <span className="text-4xl font-light text-neutral-300 dark:text-neutral-600">{step}</span>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#2F80FF]/10 text-[#3BA3FF]">
+          {icon}
+        </div>
+      </div>
+      <h3 className="text-xl font-semibold text-neutral-950 dark:text-white">{title}</h3>
+      <p className="mt-3 leading-7 text-neutral-600 dark:text-neutral-400">{description}</p>
     </div>
   );
 }
+
+const previewRows = [
+  { merchant: "Uber", amount: "$35.000" },
+  { merchant: "Netflix", amount: "$29.900" },
+  { merchant: "Éxito", amount: "$214.300" },
+] as const;
+
+function DashboardPreviewMockup() {
+  return (
+    <div
+      className={cn(
+        "w-full max-w-2xl overflow-hidden p-6 md:p-8",
+        landingGlass,
+        "ring-1 ring-[#2F80FF]/10 dark:ring-[#3BA3FF]/15",
+      )}
+    >
+      <div className="mb-6 flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-[#2F80FF]/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+        <span className="h-2.5 w-2.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+        <span className="ml-3 text-xs font-medium uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
+          Dashboard preview
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <PreviewMetric label="Total gastado" value="$757.946" />
+        <PreviewMetric label="Número de gastos" value="10" />
+        <PreviewMetric label="Promedio" value="$75.795" />
+        <PreviewMetric label="Moneda" value="COP" />
+      </div>
+
+      <div className="mt-6 overflow-hidden rounded-2xl border border-black/8 bg-white/60 dark:border-white/10 dark:bg-black/20">
+        <div className="grid grid-cols-2 gap-4 border-b border-black/8 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:border-white/10 dark:text-neutral-400">
+          <span>Comercio</span>
+          <span className="text-right">Monto</span>
+        </div>
+        {previewRows.map((row) => (
+          <div
+            key={row.merchant}
+            className="grid grid-cols-2 gap-4 border-b border-black/5 px-4 py-3 last:border-0 dark:border-white/5"
+          >
+            <span className="font-medium text-neutral-900 dark:text-white">{row.merchant}</span>
+            <span className="text-right font-semibold text-neutral-950 dark:text-white">{row.amount}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PrivacyBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-[#2F80FF]/25 bg-[#2F80FF]/8 px-4 py-2 text-sm font-medium text-[#1a5fb8] dark:border-[#3BA3FF]/35 dark:bg-[#3BA3FF]/10 dark:text-[#9fd4ff]">
+      {label}
+    </span>
+  );
+}
+
+function PreviewMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.25rem] border border-black/10 bg-white/80 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.06]">
+      <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-semibold text-neutral-950 dark:text-white">{value}</p>
+    </div>
+  );
+}
+

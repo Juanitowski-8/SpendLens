@@ -20,7 +20,11 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
-/frontend/.env.local
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+backend/.env
+backend/.env.*
 
 # Editor directories and files
 .vscode/
@@ -37,3 +41,8 @@ node_modules/
 /backend/.gradle
 /backend/build
 backend/src/main/resources/application-local.properties
+
+# Local backups and design references (not part of the app)
+frontend/src_backup_before_v0/
+frontend/v0-reference/
+/src/

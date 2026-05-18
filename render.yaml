@@ -1,0 +1,32 @@
+# Render Blueprint (opcional): Dashboard → New → Blueprint → conecta el repo
+# Completa FRONTEND_URL y GOOGLE_GMAIL_* tras crear el servicio.
+services:
+  - type: web
+    name: spendlens-api
+    runtime: java
+    plan: free
+    rootDir: backend
+    buildCommand: ./mvnw clean package -DskipTests
+    startCommand: java -jar target/backend-0.0.1-SNAPSHOT.jar
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION_MS
+        value: "86400000"
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_GMAIL_CLIENT_ID
+        sync: false
+      - key: GOOGLE_GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_GMAIL_REDIRECT_URI
+        sync: false
+      - key: GOOGLE_GMAIL_SCOPES
+        value: https://www.googleapis.com/auth/gmail.readonly

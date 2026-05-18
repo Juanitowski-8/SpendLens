@@ -1,4 +1,13 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
+/** En producción (Vercel) define VITE_API_URL = URL pública del backend (Render). */
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8081" : "");
+
+export const isApiConfigured = API_BASE_URL.length > 0;
+
+/** Ruta del endpoint autenticado que devuelve la URL de Google (usar `connectGmail()`). */
+export function getGmailConnectUrl(): string {
+  return `${API_BASE_URL}/api/auth/gmail/connect-url`;
+}
 
 export type GmailSyncResult = {
   importedCount: number;
@@ -7,7 +16,7 @@ export type GmailSyncResult = {
 };
 
 export async function connectGmail(): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/connect-url`, {
+  const response = await fetch(getGmailConnectUrl(), {
     headers: getAuthHeaders(),
   });
 

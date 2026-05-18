@@ -1,6 +1,19 @@
-import type { ComponentType } from "react";
-import { ChevronDown, LayoutGrid, List, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  ChevronDown,
+  FileText,
+  Hash,
+  LayoutGrid,
+  List,
+  Mail,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DailySpendChart, StoreSpendChart } from "@/components/SpendCharts";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +43,6 @@ import type {
   Expense,
   DashboardSummary,
   CategoryBreakdownItem,
-  CreateExpensePayload,
 } from "@/lib/api";
 
 type DashboardViewProps = {
@@ -38,7 +50,15 @@ type DashboardViewProps = {
   onLogout: () => void;
 };
 
-export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps) {
+type AlertItem = { id: string; tone: "success" | "error"; message: string };
+
+const glassCard =
+  "rounded-[1.75rem] border border-black/10 bg-white/80 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]";
+
+const inputClass =
+  "w-full rounded-2xl border border-black/10 bg-white/90 px-4 py-3 text-sm text-neutral-950 outline-none transition placeholder:text-neutral-400 focus:border-[#3BA3FF] focus:ring-2 focus:ring-[#3BA3FF]/20 dark:border-white/10 dark:bg-white/[0.06] dark:text-white dark:placeholder:text-neutral-500";
+
+export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -80,32 +100,7 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const syncLabel =
-    syncPhase === "syncing"
-      ? "Sincronizando…"
-      : syncPhase === "completed"
-        ? "Última sincronización completada"
-        : "Listo para sincronizar";
-
-  const handleSync = async () => {
-    setSyncPhase("syncing");
-    setSyncMessage(null);
-    setSyncError(null);
-
-    try {
-      const result = await syncGmail();
-      setSyncMessage(
-        `Sincronización completada: ${result.importedCount} importados, ${result.skippedCount} omitidos.`,
-      );
-      await loadDashboard();
-      setSyncPhase("completed");
-    } catch (err) {
-      setSyncPhase("idle");
-      setSyncError(err instanceof Error ? err.message : "Error al sincronizar Gmail");
-    }
-  };
-
-  const formatAmount = (value: number | null | undefined, currencyCode = "COP") => {
+  const formatAmount = useCallback((value: number | null | undefined, currencyCode = "COP") => {
     if (value == null || Number.isNaN(value)) {
       return "--";
     }
@@ -115,7 +110,27 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
       currency: currencyCode,
       maximumFractionDigits: 0,
     }).format(value);
-  };
+  }, []);
+
+  const formatMetricAmount = useCallback(
+    (value: number | null | undefined, currencyCode = "COP") => {
+      if (value == null || Number.isNaN(value)) {
+        return "--";
+      }
+
+      if (Math.abs(value) >= 1_000_000) {
+        return new Intl.NumberFormat("es-CO", {
+          style: "currency",
+          currency: currencyCode,
+          notation: "compact",
+          maximumFractionDigits: 1,
+        }).format(value);
+      }
+
+      return formatAmount(value, currencyCode);
+    },
+    [formatAmount],
+  );
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -150,62 +165,61 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const handleSync = async () => {
+    setSyncPhase("syncing");
+    setSyncMessage(null);
+    setSyncError(null);
+
+    try {
+      const result = await syncGmail();
+      setSyncMessage(
+        `Importados ${result.importedCount} gastos desde Gmail · ${result.skippedCount} correos omitidos (sin monto o duplicados).`,
+      );
+      await loadDashboard();
+      setSyncPhase("completed");
+    } catch (err) {
+      setSyncPhase("idle");
+      setSyncError(err instanceof Error ? err.message : "Error al sincronizar Gmail");
+    }
+  };
+
   const validateForm = (): string | null => {
-    if (!merchant || merchant.trim() === "") {
-      return "El comercio es requerido.";
-    }
-
+    if (!merchant.trim()) return "El comercio es requerido.";
     const num = Number(amount);
-
-    if (Number.isNaN(num) || num <= 0) {
-      return "El monto debe ser mayor a 0.";
-    }
-
-    if (!transactionDateInput) {
-      return "La fecha es requerida.";
-    }
-
+    if (Number.isNaN(num) || num <= 0) return "El monto debe ser mayor a 0.";
+    if (!transactionDateInput) return "La fecha es requerida.";
     return null;
   };
 
   const handleCreateExpense = async () => {
     setFormError(null);
-
     const validationError = validateForm();
-
     if (validationError) {
       setFormError(validationError);
       return;
     }
 
-    const payload: CreateExpensePayload = {
-      merchant: merchant.trim(),
-      amount: Number(amount),
-      currency: currency || "COP",
-      transactionDate: transactionDateInput,
-      description: descriptionInput || undefined,
-      categoryId: categoryIdInput || undefined,
-    };
-
     setSubmitting(true);
-
     try {
-      await createExpense(payload);
+      await createExpense({
+        merchant: merchant.trim(),
+        amount: Number(amount),
+        currency: currency || "COP",
+        transactionDate: transactionDateInput,
+        description: descriptionInput || undefined,
+        categoryId: categoryIdInput || undefined,
+      });
       setSuccessMessage("Gasto creado correctamente.");
-
       await loadDashboard();
-
       setMerchant("");
       setAmount("");
       setCurrency("COP");
       setTransactionDateInput(new Date().toISOString().slice(0, 10));
       setDescriptionInput("");
       setCategoryIdInput(null);
-
       window.setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al crear gasto";
-      setFormError(message);
+      setFormError(err instanceof Error ? err.message : "Error al crear gasto");
     } finally {
       setSubmitting(false);
     }
@@ -215,18 +229,13 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
     setImportError(null);
     setImportMessage(null);
     setImporting(true);
-
     try {
       const result = await importMockReceipts();
-
       setImportMessage(`Se importaron ${result.importedCount} recibos de prueba.`);
-
       await loadDashboard();
-
       window.setTimeout(() => setImportMessage(null), 5000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al importar recibos";
-      setImportError(message);
+      setImportError(err instanceof Error ? err.message : "Error al importar recibos");
     } finally {
       setImporting(false);
     }
@@ -235,32 +244,24 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const handleParseReceiptText = async () => {
     setParseError(null);
     setParseMessage(null);
-
     if (!receiptText.trim()) {
       setParseError("Pega el texto de un recibo antes de procesarlo.");
       return;
     }
-
     setParsingReceipt(true);
-
     try {
       const result = await importReceiptText({ text: receiptText.trim() });
       const created = result.createdTransactions[0];
-
       setParseMessage(
         created
           ? `Recibo procesado: ${created.merchant} por ${formatAmount(created.amount, created.currency)}.`
           : `Se procesaron ${result.importedCount} recibos desde texto.`,
       );
-
       setReceiptText("");
-
       await loadDashboard();
-
       window.setTimeout(() => setParseMessage(null), 5000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al procesar el texto del recibo";
-      setParseError(message);
+      setParseError(err instanceof Error ? err.message : "Error al procesar el texto del recibo");
     } finally {
       setParsingReceipt(false);
     }
@@ -269,262 +270,311 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
   const handleDeleteExpense = async (expense: Expense) => {
     setDeleteError(null);
     setDeleteMessage(null);
-
     const confirmed = window.confirm(
       `¿Eliminar el gasto de ${expense.merchant} por ${formatAmount(expense.amount, expense.currency)}?`,
     );
-
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setDeletingExpenseId(expense.id);
-
     try {
       await deleteExpense(expense.id);
       setDeleteMessage("Gasto eliminado correctamente.");
-
       await loadDashboard();
-
       window.setTimeout(() => setDeleteMessage(null), 3000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Error al eliminar gasto";
-      setDeleteError(message);
+      setDeleteError(err instanceof Error ? err.message : "Error al eliminar gasto");
     } finally {
       setDeletingExpenseId(null);
     }
   };
 
-  const chartBand =
-    "from-transparent via-[#2F80FF]/40 to-transparent dark:from-transparent dark:via-[#3BA3FF]/65 dark:to-transparent";
+  const alerts = useMemo<AlertItem[]>(() => {
+    const items: AlertItem[] = [];
+    const push = (id: string, tone: "success" | "error", message: string | null) => {
+      if (message) items.push({ id, tone, message });
+    };
+    push("error", "error", error);
+    push("import-error", "error", importError);
+    push("import", "success", importMessage);
+    push("sync-error", "error", syncError);
+    push("sync", "success", syncMessage);
+    push("delete-error", "error", deleteError);
+    push("delete", "success", deleteMessage);
+    push("parse-error", "error", parseError);
+    push("parse", "success", parseMessage);
+    return items;
+  }, [
+    deleteError,
+    deleteMessage,
+    error,
+    importError,
+    importMessage,
+    parseError,
+    parseMessage,
+    syncError,
+    syncMessage,
+  ]);
+
+  const gmailCount = expenses.filter((e) => e.source === "GMAIL").length;
+  const manualCount = expenses.filter((e) => e.source === "MANUAL").length;
+
+  const syncStatusLabel =
+    syncPhase === "syncing"
+      ? "Sincronizando correos de Gmail…"
+      : syncPhase === "completed"
+        ? "Última sincronización lista"
+        : "Listo para sincronizar";
 
   return (
-    <div className="min-h-[calc(100vh-5rem)] bg-[#030303] text-white">
-      <div className="mx-auto flex max-w-7xl gap-6 px-6 py-8">
-        <aside className="sticky top-24 hidden w-72 shrink-0 rounded-[2rem] border border-white/10 bg-[#0F0F0F]/90 p-6 shadow-[0_30px_90px_rgba(0,0,0,0.25)] lg:block">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/50">
+    <div className="min-h-[calc(100vh-5rem)]">
+      <div className="mx-auto flex max-w-7xl gap-5 px-4 py-6 lg:gap-8 lg:px-6 lg:py-8">
+        <aside
+          className={cn(
+            "sticky top-24 hidden w-64 shrink-0 flex-col self-start lg:flex xl:w-72",
+            glassCard,
+            "p-5",
+          )}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#3BA3FF]">
             Aplicación
           </p>
 
-          <nav className="mt-6 space-y-1 text-sm">
-            <SidebarLink active icon={LayoutGrid} label="Dashboard" onClick={() => scrollTo("top")} />
+          <nav className="mt-5 space-y-1.5 text-sm" aria-label="Navegación del panel">
+            <SidebarLink active icon={LayoutGrid} label="Resumen" onClick={() => scrollTo("top")} />
             <SidebarLink icon={List} label="Transacciones" onClick={() => scrollTo("table")} />
           </nav>
 
-          <Separator className="my-8 bg-black/10 transition-colors duration-300 dark:bg-white/10" />
+          <Separator className="my-6 bg-black/10 dark:bg-white/10" />
+
+          <div className="space-y-3 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+            <p>
+              <span className="font-medium text-neutral-950 dark:text-white">1.</span> Conecta Gmail
+              desde la barra superior.
+            </p>
+            <p>
+              <span className="font-medium text-neutral-950 dark:text-white">2.</span> Pulsa{" "}
+              <span className="text-[#3BA3FF]">Sincronizar Gmail</span> para importar recibos.
+            </p>
+            <p>
+              <span className="font-medium text-neutral-950 dark:text-white">3.</span> Revisa totales
+              y la tabla de movimientos.
+            </p>
+          </div>
 
           <button
             type="button"
             onClick={onBackToLanding}
-            className="text-xs text-neutral-500 transition-colors hover:text-[#006DFF] dark:text-[#737373] dark:hover:text-[#3BA3FF]"
+            className="mt-6 text-left text-xs font-medium text-neutral-500 transition hover:text-[#2F80FF] dark:text-neutral-400 dark:hover:text-[#3BA3FF]"
           >
-            Volver al sitio
+            ← Volver al sitio
           </button>
         </aside>
 
-        <div className="min-w-0 flex-1 px-4 py-8 sm:px-6 lg:px-10">
+        <main className="min-w-0 flex-1 space-y-8">
           <div ref={topRef} className="scroll-mt-28" />
 
-          <div className="mb-8 flex flex-col gap-4 border-b border-black/10 pb-8 transition-colors duration-300 dark:border-white/10 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <div className="flex flex-wrap gap-2 lg:hidden">
-                <Button variant="outline" size="sm" onClick={() => scrollTo("top")}>
-                  Resumen
-                </Button>
-
-                <Button variant="outline" size="sm" onClick={() => scrollTo("table")}>
-                  Tabla
-                </Button>
-              </div>
-
-              <h1 className="mt-4 text-2xl font-semibold tracking-tight text-neutral-950 transition-colors duration-300 dark:text-[#F5F5F5] sm:text-3xl">
-                Dashboard
-              </h1>
-
-              <p className="mt-2 max-w-2xl leading-7 text-neutral-600 transition-colors duration-300 dark:text-[#A3A3A3]">
-                Tu mes financiero, resumido desde gastos manuales y recibos simulados.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" className="min-w-[140px] justify-between gap-2">
-                    {month}
-                    <ChevronDown className="size-4 opacity-60" />
-                  </Button>
-                </DropdownMenuTrigger>
-
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setMonth("Mayo 2026")}>Mayo 2026</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setMonth("Abril 2026")}>Abril 2026</DropdownMenuItem>
-                  <DropdownMenuItem disabled>Marzo 2026</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button onClick={handleSync} className="gap-2">
-                <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
-                Sincronizar Gmail
+          <header className="space-y-4">
+            <div className="flex flex-wrap gap-2 lg:hidden">
+              <Button variant="outline" size="sm" onClick={() => scrollTo("top")}>
+                Resumen
               </Button>
-
-              <Button
-                variant="secondary"
-                onClick={handleImportReceipts}
-                disabled={importing}
-                className="gap-2"
-              >
-                {importing ? "Importando…" : "Importar recibos de prueba"}
-              </Button>
-
-              <Button variant="outline" onClick={onLogout}>
-                Cerrar sesión
+              <Button variant="outline" size="sm" onClick={() => scrollTo("table")}>
+                Transacciones
               </Button>
             </div>
-          </div>
 
-          <div className="space-y-10">
-            {error ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
-                {error}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#3BA3FF]/25 bg-[#2F80FF]/10 px-3 py-1 text-xs font-medium text-[#3BA3FF]">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Panel financiero
+                </p>
+                <h1 className="font-serif text-3xl font-semibold tracking-tight text-neutral-950 dark:text-white sm:text-4xl">
+                  Dashboard
+                </h1>
+                <p className="mt-2 max-w-2xl text-base leading-relaxed text-neutral-600 dark:text-neutral-400">
+                  Resumen de tus gastos desde Gmail, entradas manuales y recibos procesados. Todo
+                  en un solo lugar.
+                </p>
               </div>
-            ) : null}
 
-            {importError ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
-                {importError}
+              <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+                <span
+                  className={cn(
+                    "inline-flex h-2 w-2 rounded-full",
+                    syncPhase === "syncing" ? "animate-pulse bg-[#3BA3FF]" : "bg-emerald-500",
+                  )}
+                  aria-hidden
+                />
+                {syncStatusLabel}
               </div>
-            ) : null}
+            </div>
+          </header>
 
-            {importMessage ? (
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
-                {importMessage}
+          <section className={cn(glassCard, "p-5 sm:p-6")} aria-label="Acciones rápidas">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-950 dark:text-white">
+                  Acciones del mes
+                </h2>
+                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                  Periodo visible: <span className="font-medium text-neutral-900 dark:text-white">{month}</span>
+                </p>
               </div>
-            ) : null}
 
-            {syncError ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
-                {syncError}
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="min-w-[132px] justify-between gap-2 rounded-full border-black/10 bg-white/70 dark:border-white/10 dark:bg-white/[0.06]"
+                    >
+                      {month}
+                      <ChevronDown className="size-4 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setMonth("Mayo 2026")}>Mayo 2026</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setMonth("Abril 2026")}>Abril 2026</DropdownMenuItem>
+                    <DropdownMenuItem disabled>Marzo 2026</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  onClick={handleSync}
+                  disabled={syncPhase === "syncing"}
+                  className="gap-2 rounded-full bg-[#2F80FF] px-5 shadow-[0_12px_40px_rgba(47,128,255,0.28)] hover:bg-[#3BA3FF]"
+                >
+                  <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
+                  {syncPhase === "syncing" ? "Sincronizando…" : "Sincronizar Gmail"}
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="rounded-full border-black/10 dark:border-white/10"
+                      aria-label="Más acciones"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={handleImportReceipts} disabled={importing}>
+                      {importing ? "Importando…" : "Importar recibos de prueba"}
+                    </DropdownMenuItem>
+                    <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
+                    <DropdownMenuItem onClick={() => scrollTo("table")}>
+                      Ver todas las transacciones
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            ) : null}
+            </div>
+          </section>
 
-            {syncMessage ? (
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
-                {syncMessage}
-              </div>
-            ) : null}
+          {alerts.length > 0 ? <AlertStack items={alerts} /> : null}
 
-            {deleteError ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
-                {deleteError}
-              </div>
-            ) : null}
-
-            {deleteMessage ? (
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
-                {deleteMessage}
-              </div>
-            ) : null}
-
-            {parseError ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-200">
-                {parseError}
-              </div>
-            ) : null}
-
-            {parseMessage ? (
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-100">
-                {parseMessage}
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section aria-label="Indicadores principales">
+            <SectionTitle
+              title="Resumen del periodo"
+              description="Totales calculados desde tu base de gastos real."
+            />
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard
+                icon={Wallet}
                 title="Total gastado"
-                value={summary ? formatAmount(summary.totalSpent, summary.currency) : loading ? "Cargando..." : "--"}
-                hint={summary ? `${summary.currency} · Mayo 2026` : "Backend"}
+                value={
+                  summary
+                    ? formatMetricAmount(summary.totalSpent, summary.currency)
+                    : loading
+                      ? "…"
+                      : "--"
+                }
+                fullValue={summary ? formatAmount(summary.totalSpent, summary.currency) : undefined}
+                hint={`${summary?.currency ?? "COP"} · ${month}`}
               />
-
               <MetricCard
-                title="Número de gastos"
-                value={summary ? String(summary.expenseCount) : loading ? "Cargando..." : "--"}
-                hint="Desde el backend"
+                icon={Hash}
+                title="Transacciones"
+                value={summary ? String(summary.expenseCount) : loading ? "…" : "--"}
+                hint={`${gmailCount} Gmail · ${manualCount} manuales`}
               />
-
               <MetricCard
+                icon={TrendingUp}
                 title="Promedio por gasto"
-                value={summary ? formatAmount(summary.averageExpense, summary.currency) : loading ? "Cargando..." : "--"}
-                hint="Gasto promedio"
+                value={
+                  summary
+                    ? formatMetricAmount(summary.averageExpense, summary.currency)
+                    : loading
+                      ? "…"
+                      : "--"
+                }
+                fullValue={summary ? formatAmount(summary.averageExpense, summary.currency) : undefined}
+                hint="Monto medio del periodo"
               />
-
               <MetricCard
-                title="Moneda"
-                value={summary ? summary.currency : loading ? "Cargando..." : "COP"}
-                hint="Moneda principal"
+                icon={Mail}
+                title="Origen principal"
+                value={gmailCount >= manualCount ? "Gmail" : "Manual"}
+                hint={
+                  recentExpenses.length > 0
+                    ? `${recentExpenses.length} movimientos recientes`
+                    : "Sin movimientos recientes"
+                }
               />
             </div>
+          </section>
 
-            <div className="grid gap-6 xl:grid-cols-3">
-              <Card className="relative overflow-hidden xl:col-span-2">
-                <div
-                  className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r ${chartBand}`}
-                  aria-hidden
-                />
-
-                <CardHeader className="border-b border-black/10 pt-7 transition-colors duration-300 dark:border-white/10">
-                  <CardTitle className="text-base">Gastos por día</CardTitle>
-                  <CardDescription>Distribución simple del periodo seleccionado.</CardDescription>
-                </CardHeader>
-
-                <CardContent>
-                  <DailySpendChart />
-                </CardContent>
-              </Card>
-
-              <Card className="relative overflow-hidden">
-                <div
-                  className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r ${chartBand}`}
-                  aria-hidden
-                />
-
-                <CardHeader className="border-b border-black/10 pt-7 transition-colors duration-300 dark:border-white/10">
-                  <CardTitle className="text-base">Gasto por tienda</CardTitle>
-                  <CardDescription>Top comercios detectados.</CardDescription>
-                </CardHeader>
-
-                <CardContent>
-                  <StoreSpendChart />
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Puntos por categoría</CardTitle>
-                <CardDescription>Resumen real desde el backend.</CardDescription>
+          <section aria-label="Gráficos" className="grid gap-6 xl:grid-cols-3">
+            <Card className={cn("relative overflow-hidden xl:col-span-2", glassCard, "border-0 bg-transparent shadow-none")}>
+              <CardHeader className="border-b border-black/10 pb-4 dark:border-white/10">
+                <CardTitle className="text-base font-semibold">Gastos por día</CardTitle>
+                <CardDescription>Vista temporal de tu actividad (datos de demostración en gráfico).</CardDescription>
               </CardHeader>
+              <CardContent className="pt-6">
+                <DailySpendChart />
+              </CardContent>
+            </Card>
 
+            <Card className={cn("relative overflow-hidden", glassCard, "border-0 bg-transparent shadow-none")}>
+              <CardHeader className="border-b border-black/10 pb-4 dark:border-white/10">
+                <CardTitle className="text-base font-semibold">Por comercio</CardTitle>
+                <CardDescription>Comercios con mayor gasto acumulado.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <StoreSpendChart />
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-2" aria-label="Detalle y categorías">
+            <Card className={cn(glassCard, "border-0 bg-transparent shadow-none")}>
+              <CardHeader>
+                <CardTitle className="text-base">Por categoría</CardTitle>
+                <CardDescription>Distribución real desde el backend.</CardDescription>
+              </CardHeader>
               <CardContent>
                 {loading ? (
                   <p className="text-sm text-neutral-500">Cargando categorías…</p>
                 ) : categoryBreakdown.length === 0 ? (
-                  <p className="text-sm text-neutral-500">No hay datos de categorías disponibles.</p>
+                  <p className="text-sm text-neutral-500">Aún no hay categorías asignadas.</p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-3">
                     {categoryBreakdown.map((item) => (
                       <div
                         key={item.categoryName}
-                        className="rounded-2xl border border-white/10 bg-[#0F0F0F]/90 p-4"
+                        className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/60 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]"
                       >
-                        <p className="text-sm uppercase tracking-[0.2em] text-neutral-500">
-                          {item.categoryName}
-                        </p>
-
-                        <p className="mt-2 text-2xl font-semibold text-white">
+                        <div>
+                          <p className="font-medium text-neutral-950 dark:text-white">{item.categoryName}</p>
+                          <p className="text-xs text-neutral-500">
+                            {item.count} gasto{item.count === 1 ? "" : "s"}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold tabular-nums text-neutral-950 dark:text-white">
                           {formatAmount(item.total, summary?.currency ?? "COP")}
-                        </p>
-
-                        <p className="mt-1 text-sm text-neutral-500">
-                          {item.count} gasto{item.count === 1 ? "" : "s"}
                         </p>
                       </div>
                     ))}
@@ -533,47 +583,73 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={cn(glassCard, "border-0 bg-transparent shadow-none")}>
               <CardHeader>
-                <CardTitle className="text-base">Estado de importación</CardTitle>
-                <CardDescription>{syncLabel}</CardDescription>
+                <CardTitle className="text-base">Últimos movimientos</CardTitle>
+                <CardDescription>Los 5 gastos más recientes de tu cuenta.</CardDescription>
               </CardHeader>
-
-              <CardContent className="text-sm leading-relaxed text-neutral-600 dark:text-[#A3A3A3]">
-                <p className="font-medium text-neutral-950 dark:text-[#F5F5F5]">
-                  Modo demo activo · {recentExpenses.length} gastos recientes
-                </p>
-
-                <p className="mt-2 text-xs text-neutral-500 transition-colors duration-300 dark:text-[#737373]">
-                  Los totales ya se cargan desde el backend real.
-                </p>
+              <CardContent>
+                {loading ? (
+                  <p className="text-sm text-neutral-500">Cargando…</p>
+                ) : recentExpenses.length === 0 ? (
+                  <p className="text-sm text-neutral-500">No hay gastos recientes.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {recentExpenses.slice(0, 5).map((expense) => (
+                      <li
+                        key={expense.id}
+                        className="flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-neutral-950 dark:text-white">
+                            {expense.merchant}
+                          </p>
+                          <p className="text-xs text-neutral-500">{expense.transactionDate}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-semibold tabular-nums">
+                            {formatAmount(expense.amount, expense.currency)}
+                          </p>
+                          <SourceBadge source={expense.source} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
+          </section>
 
-            <Card>
+          <section aria-label="Registrar gastos" className="grid gap-6 lg:grid-cols-2">
+            <Card className={cn(glassCard, "border-0 bg-transparent shadow-none")}>
               <CardHeader>
-                <CardTitle className="text-base">Procesar recibo desde texto</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="size-4 text-[#3BA3FF]" />
+                  Procesar recibo (texto)
+                </CardTitle>
                 <CardDescription>
-                  Pega el texto de un recibo para simular la extracción que luego hará el LLM.
+                  Pega el contenido de un correo o recibo. El sistema extrae comercio, monto y fecha.
                 </CardDescription>
               </CardHeader>
-
-              <CardContent>
+              <CardContent className="space-y-4">
                 <textarea
                   aria-label="Texto del recibo"
-                  placeholder="Ejemplo: Recibo de Uber por 35000 COP el 2026-05-17"
+                  placeholder="Ejemplo: Recibo Uber — Total 35.000 COP — 17 mayo 2026"
                   value={receiptText}
                   onChange={(e) => setReceiptText(e.target.value)}
-                  className="min-h-28 w-full rounded-md border border-white/10 bg-[#0F0F0F]/80 p-3 text-sm text-white outline-none transition-colors placeholder:text-neutral-500 focus:border-[#3BA3FF]/60"
+                  className={cn(inputClass, "min-h-28 resize-y")}
                 />
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button onClick={handleParseReceiptText} disabled={parsingReceipt}>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={handleParseReceiptText}
+                    disabled={parsingReceipt}
+                    className="rounded-full bg-[#2F80FF] hover:bg-[#3BA3FF]"
+                  >
                     {parsingReceipt ? "Procesando…" : "Procesar recibo"}
                   </Button>
-
                   <Button
                     variant="outline"
+                    className="rounded-full"
                     onClick={() => {
                       setReceiptText("");
                       setParseError(null);
@@ -581,183 +657,228 @@ export function DashboardView({ onBackToLanding, onLogout }: DashboardViewProps)
                     }}
                     disabled={parsingReceipt}
                   >
-                    Limpiar texto
-                  </Button>
-                </div>
-
-                <p className="mt-3 text-xs text-neutral-500">
-                  Por ahora es una simulación local. En la versión final, este texto vendrá desde Gmail y será procesado por un LLM real.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Crear gasto manual</CardTitle>
-                <CardDescription>Agregar un gasto manual rápidamente.</CardDescription>
-              </CardHeader>
-
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input
-                    aria-label="Merchant"
-                    placeholder="Tienda o comercio"
-                    value={merchant}
-                    onChange={(e) => setMerchant(e.target.value)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                  />
-
-                  <input
-                    aria-label="Amount"
-                    placeholder="Monto"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                    inputMode="decimal"
-                  />
-
-                  <input
-                    aria-label="Currency"
-                    placeholder="Moneda"
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                  />
-
-                  <input
-                    aria-label="Transaction Date"
-                    type="date"
-                    value={transactionDateInput}
-                    onChange={(e) => setTransactionDateInput(e.target.value)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                  />
-
-                  <input
-                    aria-label="CategoryId opcional"
-                    placeholder="CategoryId opcional"
-                    value={categoryIdInput ?? ""}
-                    onChange={(e) => setCategoryIdInput(e.target.value || null)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                  />
-
-                  <input
-                    aria-label="Description"
-                    placeholder="Descripción opcional"
-                    value={descriptionInput}
-                    onChange={(e) => setDescriptionInput(e.target.value)}
-                    className="rounded-md border border-white/10 bg-[#0F0F0F]/80 p-2 text-white"
-                  />
-                </div>
-
-                {formError ? <p className="mt-3 text-sm text-red-400">{formError}</p> : null}
-                {successMessage ? <p className="mt-3 text-sm text-green-400">{successMessage}</p> : null}
-
-                <div className="mt-3 flex gap-2">
-                  <Button onClick={handleCreateExpense} disabled={submitting}>
-                    {submitting ? "Guardando…" : "Crear gasto"}
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setMerchant("");
-                      setAmount("");
-                      setCurrency("COP");
-                      setTransactionDateInput(new Date().toISOString().slice(0, 10));
-                      setDescriptionInput("");
-                      setCategoryIdInput(null);
-                      setFormError(null);
-                    }}
-                  >
                     Limpiar
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            <div ref={tableRef} className="scroll-mt-28">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Tabla de transacciones</CardTitle>
-                  <CardDescription>Columnas listas para ordenar y filtrar en versiones futuras.</CardDescription>
-                </CardHeader>
+            <Card className={cn(glassCard, "border-0 bg-transparent shadow-none")}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Plus className="size-4 text-[#3BA3FF]" />
+                  Gasto manual
+                </CardTitle>
+                <CardDescription>Registra un gasto que no venga de Gmail.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Comercio">
+                    <input
+                      aria-label="Comercio"
+                      placeholder="Ej. Éxito, Uber…"
+                      value={merchant}
+                      onChange={(e) => setMerchant(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Monto">
+                    <input
+                      aria-label="Monto"
+                      placeholder="35000"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className={inputClass}
+                      inputMode="decimal"
+                    />
+                  </Field>
+                  <Field label="Moneda">
+                    <input
+                      aria-label="Moneda"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Fecha">
+                    <input
+                      aria-label="Fecha"
+                      type="date"
+                      value={transactionDateInput}
+                      onChange={(e) => setTransactionDateInput(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field label="Descripción (opcional)" className="sm:col-span-2">
+                    <input
+                      aria-label="Descripción"
+                      placeholder="Notas del gasto"
+                      value={descriptionInput}
+                      onChange={(e) => setDescriptionInput(e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+                {formError ? <p className="text-sm text-red-500 dark:text-red-300">{formError}</p> : null}
+                {successMessage ? (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-300">{successMessage}</p>
+                ) : null}
+                <Button
+                  onClick={handleCreateExpense}
+                  disabled={submitting}
+                  className="rounded-full bg-[#2F80FF] hover:bg-[#3BA3FF]"
+                >
+                  {submitting ? "Guardando…" : "Crear gasto"}
+                </Button>
+              </CardContent>
+            </Card>
+          </section>
 
-                <CardContent className="p-0 sm:p-0">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-black/10 hover:bg-transparent dark:border-white/10">
-                          <TableHead>Fecha</TableHead>
-                          <TableHead>Tienda</TableHead>
-                          <TableHead className="hidden sm:table-cell">Categoría</TableHead>
-                          <TableHead>Monto</TableHead>
-                          <TableHead className="hidden md:table-cell">Origen</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="text-right">Acciones</TableHead>
+          <section ref={tableRef} className="scroll-mt-28" aria-label="Tabla de transacciones">
+            <SectionTitle
+              title="Todas las transacciones"
+              description="Lista completa de gastos. Puedes eliminar registros incorrectos."
+            />
+            <Card className={cn("mt-4 overflow-hidden", glassCard, "border-0 bg-transparent p-0 shadow-none")}>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-black/10 hover:bg-transparent dark:border-white/10">
+                        <TableHead className="text-neutral-600 dark:text-neutral-400">Fecha</TableHead>
+                        <TableHead className="text-neutral-600 dark:text-neutral-400">Comercio</TableHead>
+                        <TableHead className="hidden sm:table-cell text-neutral-600 dark:text-neutral-400">
+                          Categoría
+                        </TableHead>
+                        <TableHead className="text-neutral-600 dark:text-neutral-400">Monto</TableHead>
+                        <TableHead className="hidden md:table-cell text-neutral-600 dark:text-neutral-400">
+                          Origen
+                        </TableHead>
+                        <TableHead className="text-right text-neutral-600 dark:text-neutral-400">
+                          Acción
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-12 text-center text-neutral-500">
+                            Cargando transacciones…
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-
-                      <TableBody>
-                        {loading ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="py-8 text-center text-neutral-500">
-                              Cargando transacciones…
+                      ) : expenses.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-12 text-center text-neutral-500">
+                            No hay gastos. Sincroniza Gmail o crea uno manual.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        expenses.map((expense) => (
+                          <TableRow
+                            key={expense.id}
+                            className="border-black/10 dark:border-white/10"
+                          >
+                            <TableCell className="whitespace-nowrap text-neutral-600 dark:text-neutral-300">
+                              {expense.transactionDate}
+                            </TableCell>
+                            <TableCell className="max-w-[180px] truncate font-medium text-neutral-950 dark:text-white">
+                              {expense.merchant}
+                            </TableCell>
+                            <TableCell className="hidden text-neutral-600 sm:table-cell dark:text-neutral-400">
+                              {expense.categoryName ?? "Sin categoría"}
+                            </TableCell>
+                            <TableCell className="font-semibold tabular-nums text-neutral-950 dark:text-white">
+                              {formatAmount(expense.amount, expense.currency)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <SourceBadge source={expense.source} />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-full"
+                                onClick={() => handleDeleteExpense(expense)}
+                                disabled={deletingExpenseId === expense.id}
+                              >
+                                {deletingExpenseId === expense.id ? "…" : "Eliminar"}
+                              </Button>
                             </TableCell>
                           </TableRow>
-                        ) : expenses.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="py-8 text-center text-neutral-500">
-                              No se encontraron gastos.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          expenses.map((expense) => (
-                            <TableRow key={expense.id}>
-                              <TableCell className="whitespace-nowrap text-neutral-600 dark:text-[#A3A3A3]">
-                                {expense.transactionDate}
-                              </TableCell>
-
-                              <TableCell className="font-medium">{expense.merchant}</TableCell>
-
-                              <TableCell className="hidden text-neutral-600 sm:table-cell dark:text-[#A3A3A3]">
-                                {expense.categoryName ?? "Sin categoría"}
-                              </TableCell>
-
-                              <TableCell className="font-semibold">
-                                {formatAmount(expense.amount, expense.currency)}
-                              </TableCell>
-
-                              <TableCell className="hidden text-neutral-600 md:table-cell dark:text-[#A3A3A3]">
-                                {expense.source}
-                              </TableCell>
-
-                              <TableCell>
-                                <Badge variant="secondary">Cargado</Badge>
-                              </TableCell>
-
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleDeleteExpense(expense)}
-                                  disabled={deletingExpenseId === expense.id}
-                                >
-                                  {deletingExpenseId === expense.id ? "Eliminando…" : "Eliminar"}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        </main>
       </div>
     </div>
+  );
+}
+
+function SectionTitle({ title, description }: { title: string; description: string }) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold tracking-tight text-neutral-950 dark:text-white">{title}</h2>
+      <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{description}</p>
+    </div>
+  );
+}
+
+function AlertStack({ items }: { items: AlertItem[] }) {
+  return (
+    <div className="space-y-2" role="status" aria-live="polite">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className={cn(
+            "rounded-2xl border px-4 py-3 text-sm",
+            item.tone === "success"
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+              : "border-red-500/25 bg-red-500/10 text-red-800 dark:text-red-200",
+          )}
+        >
+          {item.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={cn("block space-y-1.5", className)}>
+      <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const isGmail = source === "GMAIL";
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "mt-1 text-[10px] uppercase tracking-wide",
+        isGmail
+          ? "border-[#3BA3FF]/40 text-[#3BA3FF]"
+          : "border-neutral-400/40 text-neutral-500",
+      )}
+    >
+      {isGmail ? "Gmail" : source === "MANUAL" ? "Manual" : source}
+    </Badge>
   );
 }
 
@@ -777,31 +898,46 @@ function SidebarLink({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-all duration-300",
+        "flex w-full items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left text-sm transition-all",
         active
-          ? "border-[#2F80FF]/35 bg-[#2F80FF]/10 text-neutral-950 shadow-sm dark:border-[#3BA3FF]/35 dark:bg-[#2F80FF]/15 dark:text-[#F5F5F5] dark:shadow-[0_0_24px_rgba(47,128,255,0.12)]"
-          : "border-transparent text-neutral-600 hover:border-black/10 hover:bg-black/[0.03] hover:text-[#006DFF] dark:text-[#A3A3A3] dark:hover:border-white/10 dark:hover:bg-white/[0.04] dark:hover:text-[#3BA3FF]",
+          ? "border-[#2F80FF]/35 bg-[#2F80FF]/10 font-medium text-neutral-950 shadow-sm dark:text-white"
+          : "border-transparent text-neutral-600 hover:border-black/10 hover:bg-black/[0.03] dark:text-neutral-400 dark:hover:border-white/10 dark:hover:bg-white/[0.04]",
       )}
     >
-      <Icon className="size-4" aria-hidden />
+      <Icon className="size-4 shrink-0 text-[#3BA3FF]" aria-hidden />
       {label}
     </button>
   );
 }
 
-function MetricCard({ title, value, hint }: { title: string; value: string; hint: string }) {
+function MetricCard({
+  icon: Icon,
+  title,
+  value,
+  hint,
+  fullValue,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  value: string;
+  hint: string;
+  fullValue?: string;
+}) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-xl font-semibold tracking-tight sm:text-2xl">{value}</CardTitle>
-      </CardHeader>
-
-      <CardContent>
-        <p className="text-xs text-neutral-500 transition-colors duration-300 dark:text-[#737373]">
-          {hint}
-        </p>
-      </CardContent>
-    </Card>
+    <div className={cn(glassCard, "p-5 transition hover:-translate-y-0.5 hover:shadow-[0_28px_90px_rgba(47,128,255,0.12)]")}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">{title}</p>
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#2F80FF]/10 text-[#3BA3FF]">
+          <Icon className="size-4" aria-hidden />
+        </span>
+      </div>
+      <p
+        className="mt-3 font-serif text-2xl font-semibold tracking-tight text-neutral-950 tabular-nums dark:text-white sm:text-3xl"
+        title={fullValue}
+      >
+        {value}
+      </p>
+      <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">{hint}</p>
+    </div>
   );
 }
