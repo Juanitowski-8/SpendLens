@@ -60,7 +60,16 @@ Credenciales por defecto del compose: usuario `spendlens`, contraseña `spendlen
 
 ## 2. Backend (Render)
 
-### Configuración del servicio
+### Opción A — Docker (recomendado, `Dockerfile` en la raíz del repo)
+
+| Campo | Valor |
+|-------|--------|
+| **Runtime** | Docker |
+| **Dockerfile Path** | `./Dockerfile` |
+| **Root Directory** | *(vacío — raíz del repo)* |
+| **Health Check Path** | `/api/health` |
+
+### Opción B — Java nativo
 
 | Campo | Valor |
 |-------|--------|
@@ -180,7 +189,60 @@ cd ..\backend
 
 ---
 
-## 6. Paso a paso: Render PostgreSQL + Render API + Vercel (primera vez)
+## 6. Stack completo (Vercel ya desplegado)
+
+Si tu frontend ya está en Vercel (ej. `https://spend-lens-pearl.vercel.app`), completa en este orden:
+
+### A. PostgreSQL en Render
+
+1. **New +** → **PostgreSQL** (misma región que el API).
+2. Anota usuario, contraseña y nombre de base.
+
+### B. Web Service (backend)
+
+1. **New +** → **Web Service** → repo **SpendLens**.
+2. **Runtime: Docker** → Dockerfile `./Dockerfile` (raíz del repo).
+3. **Link database** → tu Postgres de Render.
+4. **Environment** (completa):
+
+```env
+DATABASE_URL=jdbc:postgresql://HOST:5432/DATABASE?sslmode=require
+DATABASE_USERNAME=USER
+DATABASE_PASSWORD=PASSWORD
+JWT_SECRET=genera-un-guid-largo
+JWT_EXPIRATION_MS=86400000
+FRONTEND_URL=https://spend-lens-pearl.vercel.app
+GOOGLE_GMAIL_CLIENT_ID=tu-client-id.apps.googleusercontent.com
+GOOGLE_GMAIL_CLIENT_SECRET=tu-client-secret
+GOOGLE_GMAIL_REDIRECT_URI=https://TU-SERVICIO.onrender.com/api/auth/gmail/callback
+GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly
+```
+
+5. Deploy → prueba `https://TU-SERVICIO.onrender.com/api/health` → `UP`.
+
+### C. Vercel (conectar al backend)
+
+1. **Settings** → **Environment Variables**:
+   ```env
+   VITE_API_URL=https://TU-SERVICIO.onrender.com
+   ```
+2. **Deployments** → **Redeploy** (obligatorio: Vite embebe la variable en el build).
+3. El banner amarillo debe desaparecer; login debe llamar a Render, no a Vercel.
+
+### D. Google OAuth
+
+- **JavaScript origins:** `https://spend-lens-pearl.vercel.app`, `http://localhost:5173`
+- **Redirect URI:** `https://TU-SERVICIO.onrender.com/api/auth/gmail/callback`
+
+### E. Prueba final
+
+1. Abre Vercel → **Registro** (cuenta nueva en DB de Render).
+2. **Login** → **Dashboard** → crear gasto.
+3. **Conectar Gmail** → **Sincronizar Gmail**.
+
+---
+
+## 7. Paso a paso: Render PostgreSQL + Render API + Vercel (primera vez)
 
 Tu Docker local **solo sirve en tu PC**. Orden recomendado:
 
@@ -293,7 +355,7 @@ Si login falla: revisa `VITE_API_URL` en Vercel y CORS (`FRONTEND_URL` en Render
 
 ---
 
-## 7. Orden de despliegue recomendado (resumen)
+## 8. Orden de despliegue recomendado (resumen)
 
 1. PostgreSQL en Render (+ link al Web Service).
 2. Backend en Render con todas las env vars.
@@ -304,7 +366,7 @@ Si login falla: revisa `VITE_API_URL` en Vercel y CORS (`FRONTEND_URL` en Render
 
 ---
 
-## 8. Desarrollo local (resumen)
+## 9. Desarrollo local (resumen)
 
 ```powershell
 docker compose up -d
@@ -328,7 +390,7 @@ CORS permite `http://localhost:*`, `https://*.vercel.app` y el valor de `FRONTEN
 
 ---
 
-## 9. Gmail (implementado)
+## 10. Gmail (implementado)
 
 - `GET /api/auth/gmail/connect-url` — requiere JWT; devuelve URL de Google con `state` firmado.
 - `GET /api/auth/gmail/callback` — intercambia `code`, guarda tokens, redirige `?gmail=connected|error`.

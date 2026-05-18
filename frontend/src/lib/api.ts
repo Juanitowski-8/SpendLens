@@ -4,6 +4,14 @@ export const API_BASE_URL =
 
 export const isApiConfigured = API_BASE_URL.length > 0;
 
+function ensureApiConfigured(): void {
+  if (!isApiConfigured) {
+    throw new Error(
+      "Falta VITE_API_URL en Vercel. Añádela apuntando a tu backend en Render y vuelve a desplegar.",
+    );
+  }
+}
+
 /** Ruta del endpoint autenticado que devuelve la URL de Google (usar `connectGmail()`). */
 export function getGmailConnectUrl(): string {
   return `${API_BASE_URL}/api/auth/gmail/connect-url`;
@@ -143,6 +151,7 @@ async function getErrorMessage(response: Response): Promise<string> {
 }
 
 export async function login(payload: LoginRequest): Promise<AuthResponse> {
+  ensureApiConfigured();
   const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -154,6 +163,7 @@ export async function login(payload: LoginRequest): Promise<AuthResponse> {
 }
 
 export async function register(payload: RegisterRequest): Promise<AuthResponse> {
+  ensureApiConfigured();
   const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

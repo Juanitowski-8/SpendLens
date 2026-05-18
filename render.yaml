@@ -1,13 +1,12 @@
 # Render Blueprint (opcional): Dashboard → New → Blueprint → conecta el repo
-# Completa FRONTEND_URL y GOOGLE_GMAIL_* tras crear el servicio.
+# Completa FRONTEND_URL (Vercel) y GOOGLE_GMAIL_* tras el primer deploy.
 services:
   - type: web
     name: spendlens-api
-    runtime: java
+    runtime: docker
     plan: free
-    rootDir: backend
-    buildCommand: ./mvnw clean package -DskipTests
-    startCommand: java -jar target/backend-0.0.1-SNAPSHOT.jar
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
