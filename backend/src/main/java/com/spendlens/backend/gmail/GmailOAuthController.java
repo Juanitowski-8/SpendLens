@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,8 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.spendlens.backend.transactions.TransactionResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -28,17 +31,20 @@ public class GmailOAuthController {
 
     private final GmailOAuthService gmailOAuthService;
     private final GmailSyncService gmailSyncService;
+    private final GmailMaintenanceService gmailMaintenanceService;
     private final UserRepository userRepository;
     private final String frontendUrl;
 
     public GmailOAuthController(
             GmailOAuthService gmailOAuthService,
             GmailSyncService gmailSyncService,
+            GmailMaintenanceService gmailMaintenanceService,
             UserRepository userRepository,
             @Value("${frontend.url:http://localhost:5173}") String frontendUrl
     ) {
         this.gmailOAuthService = gmailOAuthService;
         this.gmailSyncService = gmailSyncService;
+        this.gmailMaintenanceService = gmailMaintenanceService;
         this.userRepository = userRepository;
         this.frontendUrl = frontendUrl;
     }
@@ -77,6 +83,21 @@ public class GmailOAuthController {
     @PostMapping("/sync")
     public MockReceiptImportResult sync(Authentication authentication) {
         return gmailSyncService.sync(getEmail(authentication));
+    }
+
+    @GetMapping("/suspicious-transactions")
+    public List<TransactionResponse> suspiciousTransactions(Authentication authentication) {
+        return gmailMaintenanceService.findSuspiciousTransactions(getEmail(authentication));
+    }
+
+    @DeleteMapping("/suspicious-transactions")
+    public GmailCountResponse deleteSuspiciousTransactions(Authentication authentication) {
+        return gmailMaintenanceService.deleteSuspiciousTransactions(getEmail(authentication));
+    }
+
+    @PostMapping("/recategorize")
+    public GmailCountResponse recategorize(Authentication authentication) {
+        return gmailMaintenanceService.recategorizeGmailTransactions(getEmail(authentication));
     }
 
     private UUID getUserId(Authentication authentication) {

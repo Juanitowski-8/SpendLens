@@ -17,22 +17,23 @@ import java.util.regex.Pattern;
 @Component
 public class GmailReceiptParser {
 
-    static final BigDecimal MAX_REASONABLE_COP_AMOUNT = new BigDecimal("20000000");
-
     private static final int CONTEXT_WINDOW = 48;
 
     private static final String[] PRIORITY_AMOUNT_KEYWORDS = {
             "valor total",
             "valor pagado",
             "total pagado",
+            "payment total",
+            "amount paid",
+            "total paid",
+            "charged",
+            "pagaste",
             "total:",
             "total ",
             "monto",
-            "pagaste",
             "pago",
             "compra",
-            "cobro",
-            "total"
+            "cobro"
     };
 
     private static final String[] IGNORE_AMOUNT_KEYWORDS = {
@@ -47,13 +48,30 @@ public class GmailReceiptParser {
             "transaccion",
             "comprobante",
             "código",
-            "codigo"
+            "codigo",
+            "order number",
+            "invoice number",
+            "tracking"
     };
 
     private static final Pattern AMOUNT_TOKEN = Pattern.compile(
-            "(?:\\$|COP|USD|EUR)?\\s*(\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d{1,2})?)",
+            "(?:\\$|COP|USD|EUR|CAD)?\\s*(\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d{1,2})?)",
             Pattern.CASE_INSENSITIVE
     );
+
+    private final GmailPromotionalFilter promotionalFilter;
+    private final GmailAmountValidator amountValidator;
+    private final GmailMerchantNormalizer merchantNormalizer;
+
+    public GmailReceiptParser(
+            GmailPromotionalFilter promotionalFilter,
+            GmailAmountValidator amountValidator,
+            GmailMerchantNormalizer merchantNormalizer
+    ) {
+        this.promotionalFilter = promotionalFilter;
+        this.amountValidator = amountValidator;
+        this.merchantNormalizer = merchantNormalizer;
+    }
 
     public Optional<ParsedGmailReceipt> parse(
             String subject,
@@ -61,6 +79,10 @@ public class GmailReceiptParser {
             String from,
             Long internalDateMillis
     ) {
+        if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
+            return Optional.empty();
+        }
+
         String combined = String.join(
                 "\n",
                 safe(subject),
@@ -72,20 +94,62 @@ public class GmailReceiptParser {
             return Optional.empty();
         }
 
-        String currency = extractCurrency(combined);
-        Optional<BigDecimal> amount = extractAmount(combined, currency);
+        Optional<String> currency = resolveCurrency(combined);
+        if (currency.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<BigDecimal> amount = extractAmount(combined, currency.get());
         if (amount.isEmpty()) {
             return Optional.empty();
         }
 
-        String merchant = extractMerchant(combined, from);
+        String merchant = merchantNormalizer.normalize(extractMerchant(combined, from));
+        if (merchant.isBlank() || promotionalFilter.isPromotionalMerchantOrDescription(merchant, combined)) {
+            return Optional.empty();
+        }
+
+        if (!amountValidator.isReasonableAmount(
+                amount.get(),
+                currency.get(),
+                merchant,
+                subject,
+                snippet
+        )) {
+            return Optional.empty();
+        }
+
         LocalDate transactionDate = internalDateMillis != null
                 ? Instant.ofEpochMilli(internalDateMillis).atZone(ZoneId.systemDefault()).toLocalDate()
                 : extractDate(combined);
 
         String description = truncate("Gmail: " + safe(subject) + " — " + safe(snippet), 500);
 
-        return Optional.of(new ParsedGmailReceipt(merchant, amount.get(), currency, transactionDate, description));
+        return Optional.of(new ParsedGmailReceipt(
+                merchant,
+                amount.get(),
+                currency.get(),
+                transactionDate,
+                description
+        ));
+    }
+
+    private Optional<String> resolveCurrency(String text) {
+        String upper = text.toUpperCase(Locale.ROOT);
+
+        if (upper.contains("COP") || upper.contains("COL$")) {
+            return Optional.of("COP");
+        }
+
+        if (amountValidator.mentionsForeignCurrency(text)) {
+            return Optional.empty();
+        }
+
+        if (text.contains("$") && !upper.contains("COP")) {
+            return Optional.empty();
+        }
+
+        return Optional.of("COP");
     }
 
     private String extractMerchant(String text, String from) {
@@ -106,12 +170,18 @@ public class GmailReceiptParser {
         if (lower.contains("spotify")) {
             return "Spotify";
         }
+        if (lower.contains("best buy")) {
+            return "Best Buy";
+        }
+        if (lower.contains("bath & body") || lower.contains("bath and body")) {
+            return "Bath & Body Works";
+        }
 
         if (from != null && !from.isBlank()) {
             Matcher fromMatcher = Pattern.compile("^\\s*([^<]+)").matcher(from.trim());
             if (fromMatcher.find()) {
                 String name = fromMatcher.group(1).replace("\"", "").trim();
-                if (!name.isBlank() && !name.contains("@")) {
+                if (!name.isBlank() && !name.contains("@") && !name.toLowerCase(Locale.ROOT).contains("no-reply")) {
                     return truncate(name, 180);
                 }
             }
@@ -123,7 +193,7 @@ public class GmailReceiptParser {
         }
 
         Pattern merchantPattern = Pattern.compile(
-                "(?i)(?:recibo de|compra en|pago a|comercio:)\\s+([\\p{L}\\p{N}\\s]+)"
+                "(?i)(?:recibo de|compra en|pago a|comercio:)\\s+([\\p{L}\\p{N}\\s&'.-]+)"
         );
         Matcher matcher = merchantPattern.matcher(text);
         if (matcher.find()) {
@@ -152,7 +222,7 @@ public class GmailReceiptParser {
                 continue;
             }
 
-            if (!isReasonableAmount(amount, currency)) {
+            if (!amountValidator.isReasonableAmount(amount, currency, "", text, "")) {
                 continue;
             }
 
@@ -184,8 +254,8 @@ public class GmailReceiptParser {
             }
         }
 
-        if (window.contains("cop") || window.contains("$")) {
-            score += 3;
+        if (window.contains("cop")) {
+            score += 5;
         }
 
         return score;
@@ -197,20 +267,12 @@ public class GmailReceiptParser {
         String window = (" " + text.substring(windowStart, windowEnd) + " ").toLowerCase(Locale.ROOT);
 
         for (String keyword : IGNORE_AMOUNT_KEYWORDS) {
-            if (window.contains(" " + keyword.trim() + " ") || window.contains(keyword)) {
+            if (window.contains(keyword)) {
                 return true;
             }
         }
 
         return false;
-    }
-
-    private boolean isReasonableAmount(BigDecimal amount, String currency) {
-        if (!"COP".equalsIgnoreCase(currency)) {
-            return true;
-        }
-
-        return amount.compareTo(MAX_REASONABLE_COP_AMOUNT) <= 0;
     }
 
     private BigDecimal parseAmount(String rawAmount) {
@@ -232,19 +294,6 @@ public class GmailReceiptParser {
         }
 
         return new BigDecimal(cleanedAmount);
-    }
-
-    private String extractCurrency(String text) {
-        String upper = text.toUpperCase(Locale.ROOT);
-
-        if (upper.contains("USD")) {
-            return "USD";
-        }
-        if (upper.contains("EUR")) {
-            return "EUR";
-        }
-
-        return "COP";
     }
 
     private LocalDate extractDate(String text) {

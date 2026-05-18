@@ -42,6 +42,29 @@ export async function syncGmail(): Promise<GmailSyncResult> {
   return handleResponse<GmailSyncResult>(response);
 }
 
+export type GmailCountResult = {
+  count: number;
+};
+
+export async function deleteSuspiciousGmailTransactions(): Promise<GmailCountResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/suspicious-transactions`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+
+  return handleResponse<GmailCountResult>(response);
+}
+
+export async function recategorizeGmailTransactions(): Promise<GmailCountResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/recategorize`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: "{}",
+  });
+
+  return handleResponse<GmailCountResult>(response);
+}
+
 export type AuthResponse = {
   token: string;
   userId: string;

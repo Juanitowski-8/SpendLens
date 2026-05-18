@@ -26,4 +26,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             BigDecimal amount,
             LocalDate transactionDate
     );
+
+    boolean existsByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountAndTransactionDate(
+            UUID userId,
+            TransactionSource source,
+            String merchant,
+            BigDecimal amount,
+            LocalDate transactionDate
+    );
+
+    List<Transaction> findByUserEmailAndSource(String email, TransactionSource source);
 }

@@ -90,6 +90,35 @@ public class CategoryService {
         categoryRepository.delete(category);
     }
 
+    public Category getOrCreateByName(String email, String categoryName) {
+        String normalizedEmail = normalizeEmail(email);
+        String name = categoryName.trim();
+
+        if (name.isBlank() || "Sin categoría".equalsIgnoreCase(name)) {
+            return null;
+        }
+
+        return categoryRepository.findByNameIgnoreCaseAndUserEmail(name, normalizedEmail)
+                .orElseGet(() -> {
+                    User user = userRepository.findByEmail(normalizedEmail)
+                            .orElseThrow(() -> new ResponseStatusException(
+                                    HttpStatus.NOT_FOUND,
+                                    "User not found"));
+
+                    LocalDateTime now = LocalDateTime.now();
+                    Category category = new Category(
+                            UUID.randomUUID(),
+                            user,
+                            name,
+                            null,
+                            now,
+                            now
+                    );
+
+                    return categoryRepository.save(category);
+                });
+    }
+
     private CategoryResponse toResponse(Category category) {
         return new CategoryResponse(
                 category.getId(),

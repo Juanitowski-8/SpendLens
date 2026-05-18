@@ -128,6 +128,11 @@ public class TransactionService {
         transactionRepository.delete(transaction);
     }
 
+    @Transactional(readOnly = true)
+    public TransactionResponse mapToResponse(Transaction transaction) {
+        return toResponse(transaction);
+    }
+
     private User getUser(String email) {
         return userRepository
                 .findByEmail(normalizeEmail(email))

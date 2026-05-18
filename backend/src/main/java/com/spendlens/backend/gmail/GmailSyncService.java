@@ -4,10 +4,13 @@ import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.ListMessagesResponse;
 import com.google.api.services.gmail.model.Message;
 import com.google.api.services.gmail.model.MessagePartHeader;
+import com.spendlens.backend.categories.Category;
+import com.spendlens.backend.categories.CategoryService;
 import com.spendlens.backend.imports.MockReceiptImportResult;
 import com.spendlens.backend.transactions.Transaction;
 import com.spendlens.backend.transactions.TransactionRepository;
 import com.spendlens.backend.transactions.TransactionResponse;
+import com.spendlens.backend.transactions.TransactionService;
 import com.spendlens.backend.transactions.TransactionSource;
 import com.spendlens.backend.users.User;
 import org.slf4j.Logger;
@@ -21,7 +24,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,21 +33,39 @@ public class GmailSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GmailSyncService.class);
     private static final String GMAIL_QUERY =
-            "newer_than:90d (receipt OR recibo OR factura OR purchase OR payment)";
+            "newer_than:90d (receipt OR recibo OR factura OR purchase OR payment OR pago OR compra)";
     private static final long MAX_MESSAGES = 50L;
 
     private final GmailOAuthService gmailOAuthService;
     private final GmailReceiptParser receiptParser;
     private final TransactionRepository transactionRepository;
+    private final TransactionService transactionService;
+    private final CategoryService categoryService;
+    private final GmailCategoryAssigner categoryAssigner;
+    private final GmailAmountValidator amountValidator;
+    private final GmailPromotionalFilter promotionalFilter;
+    private final GmailMerchantNormalizer merchantNormalizer;
 
     public GmailSyncService(
             GmailOAuthService gmailOAuthService,
             GmailReceiptParser receiptParser,
-            TransactionRepository transactionRepository
+            TransactionRepository transactionRepository,
+            TransactionService transactionService,
+            CategoryService categoryService,
+            GmailCategoryAssigner categoryAssigner,
+            GmailAmountValidator amountValidator,
+            GmailPromotionalFilter promotionalFilter,
+            GmailMerchantNormalizer merchantNormalizer
     ) {
         this.gmailOAuthService = gmailOAuthService;
         this.receiptParser = receiptParser;
         this.transactionRepository = transactionRepository;
+        this.transactionService = transactionService;
+        this.categoryService = categoryService;
+        this.categoryAssigner = categoryAssigner;
+        this.amountValidator = amountValidator;
+        this.promotionalFilter = promotionalFilter;
+        this.merchantNormalizer = merchantNormalizer;
     }
 
     public MockReceiptImportResult sync(String userEmail) {
@@ -81,6 +101,11 @@ public class GmailSyncService {
                     String snippet = message.getSnippet();
                     Long internalDate = message.getInternalDate();
 
+                    if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
+                        skippedCount++;
+                        continue;
+                    }
+
                     Optional<GmailReceiptParser.ParsedGmailReceipt> parsedReceipt = receiptParser.parse(
                             subject,
                             snippet,
@@ -95,23 +120,40 @@ public class GmailSyncService {
 
                     GmailReceiptParser.ParsedGmailReceipt receipt = parsedReceipt.get();
 
-                    if ("COP".equalsIgnoreCase(receipt.currency())
-                            && receipt.amount().compareTo(GmailReceiptParser.MAX_REASONABLE_COP_AMOUNT) > 0) {
+                    if (!amountValidator.isReasonableAmount(
+                            receipt.amount(),
+                            receipt.currency(),
+                            receipt.merchant(),
+                            subject,
+                            snippet
+                    )) {
                         skippedCount++;
                         continue;
                     }
 
-                    if (isDuplicate(user.getId(), receipt.merchant(), receipt.amount(), receipt.transactionDate())) {
+                    String normalizedMerchant = merchantNormalizer.normalize(receipt.merchant());
+
+                    if (isDuplicate(
+                            user.getId(),
+                            normalizedMerchant,
+                            receipt.amount(),
+                            receipt.transactionDate()
+                    )) {
                         skippedCount++;
                         continue;
                     }
+
+                    Category category = categoryService.getOrCreateByName(
+                            user.getEmail(),
+                            categoryAssigner.assignCategory(normalizedMerchant, subject, snippet)
+                    );
 
                     LocalDateTime now = LocalDateTime.now();
                     Transaction transaction = new Transaction(
                             UUID.randomUUID(),
                             user,
-                            null,
-                            receipt.merchant(),
+                            category,
+                            normalizedMerchant,
                             receipt.amount(),
                             receipt.currency(),
                             receipt.transactionDate(),
@@ -122,7 +164,7 @@ public class GmailSyncService {
                     );
 
                     Transaction saved = transactionRepository.save(transaction);
-                    createdTransactions.add(toResponse(saved));
+                    createdTransactions.add(transactionService.mapToResponse(saved));
                     importedCount++;
                 } catch (Exception exception) {
                     skippedCount++;
@@ -140,10 +182,16 @@ public class GmailSyncService {
         return new MockReceiptImportResult(importedCount, skippedCount, createdTransactions);
     }
 
-    private boolean isDuplicate(UUID userId, String merchant, BigDecimal amount, LocalDate transactionDate) {
-        return transactionRepository.existsByUser_IdAndMerchantIgnoreCaseAndAmountAndTransactionDate(
+    private boolean isDuplicate(
+            UUID userId,
+            String merchant,
+            BigDecimal amount,
+            LocalDate transactionDate
+    ) {
+        return transactionRepository.existsByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountAndTransactionDate(
                 userId,
-                merchant.trim(),
+                TransactionSource.GMAIL,
+                merchant,
                 amount,
                 transactionDate
         );
@@ -161,21 +209,5 @@ public class GmailSyncService {
         }
 
         return "";
-    }
-
-    private TransactionResponse toResponse(Transaction transaction) {
-        return new TransactionResponse(
-                transaction.getId(),
-                null,
-                null,
-                transaction.getMerchant(),
-                transaction.getAmount(),
-                transaction.getCurrency(),
-                transaction.getTransactionDate(),
-                transaction.getDescription(),
-                transaction.getSource(),
-                transaction.getCreatedAt(),
-                transaction.getUpdatedAt()
-        );
     }
 }

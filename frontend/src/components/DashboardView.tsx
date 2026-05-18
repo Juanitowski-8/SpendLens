@@ -38,6 +38,8 @@ import {
   importReceiptText,
   deleteExpense,
   syncGmail,
+  deleteSuspiciousGmailTransactions,
+  recategorizeGmailTransactions,
 } from "@/lib/api";
 import type {
   Expense,
@@ -114,6 +116,11 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
+  const [cleaningGmail, setCleaningGmail] = useState(false);
+  const [recategorizingGmail, setRecategorizingGmail] = useState(false);
+  const [gmailMaintenanceMessage, setGmailMaintenanceMessage] = useState<string | null>(null);
+  const [gmailMaintenanceError, setGmailMaintenanceError] = useState<string | null>(null);
+
   const formatAmount = useCallback((value: number | null | undefined, currencyCode = "COP") => {
     if (value == null || Number.isNaN(value)) {
       return "--";
@@ -183,6 +190,44 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const scrollTo = (target: "top" | "table") => {
     const el = target === "top" ? topRef.current : tableRef.current;
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleCleanSuspiciousGmail = async () => {
+    setGmailMaintenanceError(null);
+    setGmailMaintenanceMessage(null);
+    setCleaningGmail(true);
+    try {
+      const result = await deleteSuspiciousGmailTransactions();
+      setGmailMaintenanceMessage(
+        `Se limpiaron ${result.count} transacciones sospechosas importadas desde Gmail.`,
+      );
+      await loadDashboard();
+      window.setTimeout(() => setGmailMaintenanceMessage(null), 6000);
+    } catch (err) {
+      setGmailMaintenanceError(
+        err instanceof Error ? err.message : "Error al limpiar importaciones sospechosas",
+      );
+    } finally {
+      setCleaningGmail(false);
+    }
+  };
+
+  const handleRecategorizeGmail = async () => {
+    setGmailMaintenanceError(null);
+    setGmailMaintenanceMessage(null);
+    setRecategorizingGmail(true);
+    try {
+      const result = await recategorizeGmailTransactions();
+      setGmailMaintenanceMessage(`Se actualizaron ${result.count} categorías de Gmail.`);
+      await loadDashboard();
+      window.setTimeout(() => setGmailMaintenanceMessage(null), 6000);
+    } catch (err) {
+      setGmailMaintenanceError(
+        err instanceof Error ? err.message : "Error al recategorizar transacciones Gmail",
+      );
+    } finally {
+      setRecategorizingGmail(false);
+    }
   };
 
   const handleSync = async () => {
@@ -318,6 +363,8 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     push("import", "success", importMessage);
     push("sync-error", "error", syncError);
     push("sync", "success", syncMessage);
+    push("gmail-maint", "success", gmailMaintenanceMessage);
+    push("gmail-maint-error", "error", gmailMaintenanceError);
     push("delete-error", "error", deleteError);
     push("delete", "success", deleteMessage);
     push("parse-error", "error", parseError);
@@ -333,6 +380,8 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     parseMessage,
     syncError,
     syncMessage,
+    gmailMaintenanceMessage,
+    gmailMaintenanceError,
   ]);
 
   const gmailCount = expenses.filter((e) => e.source === "GMAIL").length;
@@ -489,7 +538,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       <MoreHorizontal className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuContent align="end" className="w-64">
                     <DropdownMenuItem
                       disabled={importing}
                       onClick={() => {
@@ -498,6 +547,24 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       }}
                     >
                       {importing ? "Importando…" : "Importar recibos de prueba"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={cleaningGmail}
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        void handleCleanSuspiciousGmail();
+                      }}
+                    >
+                      {cleaningGmail ? "Limpiando…" : "Limpiar importaciones sospechosas"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={recategorizingGmail}
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        void handleRecategorizeGmail();
+                      }}
+                    >
+                      {recategorizingGmail ? "Recategorizando…" : "Recategorizar Gmail"}
                     </DropdownMenuItem>
                     <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
                     <DropdownMenuItem
@@ -824,8 +891,17 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                             <TableCell className="max-w-[180px] truncate font-medium text-neutral-950 dark:text-white">
                               {expense.merchant}
                             </TableCell>
-                            <TableCell className="hidden text-neutral-600 sm:table-cell dark:text-neutral-400">
-                              {expense.categoryName ?? "Sin categoría"}
+                            <TableCell className="hidden sm:table-cell">
+                              <span
+                                className={cn(
+                                  "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
+                                  expense.categoryName
+                                    ? "bg-[#2F80FF]/10 text-[#2F80FF] dark:bg-[#3BA3FF]/15 dark:text-[#3BA3FF]"
+                                    : "bg-black/5 text-neutral-500 dark:bg-white/10 dark:text-neutral-400",
+                                )}
+                              >
+                                {expense.categoryName ?? "Sin categoría"}
+                              </span>
                             </TableCell>
                             <TableCell className="font-semibold tabular-nums text-neutral-950 dark:text-white">
                               {formatAmount(expense.amount, expense.currency)}
@@ -853,6 +929,14 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
               </CardContent>
             </Card>
           </section>
+
+          <footer className="mt-8 rounded-[1.75rem] border border-black/10 bg-white/60 px-5 py-4 text-sm leading-relaxed text-neutral-600 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.03] dark:text-neutral-400">
+            <p>
+              <span className="font-medium text-neutral-900 dark:text-white">Consejo Gmail:</span> mantén
+              tu bandeja organizada (recibos reales separados de promociones y newsletters) para reducir
+              duplicados, montos erróneos y comercios repetidos al sincronizar.
+            </p>
+          </footer>
         </main>
       </div>
     </div>
