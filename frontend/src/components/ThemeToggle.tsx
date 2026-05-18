@@ -1,22 +1,23 @@
 import { Moon, Sun } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { useTheme } from "@/context/ThemeContext";
 
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size="icon"
       onClick={toggleTheme}
-      className="size-9 shrink-0 rounded-full border border-white/10 bg-[#111111] text-white shadow-[0_10px_30px_rgba(0,0,0,0.3)] transition-all duration-300 hover:border-[#2F80FF]/40 hover:bg-white/10 hover:text-white"
       aria-label={theme === "dark" ? "Activar modo claro" : "Activar modo oscuro"}
       title={theme === "dark" ? "Modo claro" : "Modo oscuro"}
+      className="inline-flex size-11 items-center justify-center rounded-full border border-black/10 bg-white text-neutral-950 shadow-sm transition-all duration-300 hover:scale-105 hover:border-[#2F80FF]/35 hover:text-[#006DFF] dark:border-white/10 dark:bg-white/[0.04] dark:text-white dark:hover:border-[#3BA3FF]/40 dark:hover:text-[#3BA3FF]"
     >
-      {theme === "dark" ? <Sun className="size-[18px]" strokeWidth={1.75} /> : <Moon className="size-[18px]" strokeWidth={1.75} />}
-    </Button>
+      {theme === "dark" ? (
+        <Sun className="size-[18px]" strokeWidth={1.75} />
+      ) : (
+        <Moon className="size-[18px]" strokeWidth={1.75} />
+      )}
+    </button>
   );
 }

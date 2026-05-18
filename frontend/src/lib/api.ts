@@ -1,5 +1,30 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
+export type GmailSyncResult = {
+  importedCount: number;
+  skippedCount: number;
+  createdTransactions: Expense[];
+};
+
+export async function connectGmail(): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/connect-url`, {
+    headers: getAuthHeaders(),
+  });
+
+  const { authorizationUrl } = await handleResponse<{ authorizationUrl: string }>(response);
+  window.location.href = authorizationUrl;
+}
+
+export async function syncGmail(): Promise<GmailSyncResult> {
+  const response = await fetch(`${API_BASE_URL}/api/auth/gmail/sync`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: "{}",
+  });
+
+  return handleResponse<GmailSyncResult>(response);
+}
+
 export type AuthResponse = {
   token: string;
   userId: string;

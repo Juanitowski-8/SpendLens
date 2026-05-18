@@ -1,0 +1,175 @@
+package com.spendlens.backend.gmail;
+
+import com.google.api.services.gmail.Gmail;
+import com.google.api.services.gmail.model.ListMessagesResponse;
+import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.MessagePartHeader;
+import com.spendlens.backend.imports.MockReceiptImportResult;
+import com.spendlens.backend.transactions.Transaction;
+import com.spendlens.backend.transactions.TransactionRepository;
+import com.spendlens.backend.transactions.TransactionResponse;
+import com.spendlens.backend.transactions.TransactionSource;
+import com.spendlens.backend.users.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@Transactional
+public class GmailSyncService {
+
+    private static final Logger log = LoggerFactory.getLogger(GmailSyncService.class);
+    private static final String GMAIL_QUERY =
+            "newer_than:90d (receipt OR recibo OR factura OR purchase OR payment)";
+    private static final long MAX_MESSAGES = 50L;
+
+    private final GmailOAuthService gmailOAuthService;
+    private final GmailReceiptParser receiptParser;
+    private final TransactionRepository transactionRepository;
+
+    public GmailSyncService(
+            GmailOAuthService gmailOAuthService,
+            GmailReceiptParser receiptParser,
+            TransactionRepository transactionRepository
+    ) {
+        this.gmailOAuthService = gmailOAuthService;
+        this.receiptParser = receiptParser;
+        this.transactionRepository = transactionRepository;
+    }
+
+    public MockReceiptImportResult sync(String userEmail) {
+        GmailConnection connection = gmailOAuthService.getConnectionForUser(userEmail);
+        connection = gmailOAuthService.refreshAccessTokenIfNeeded(connection);
+
+        Gmail gmail = GmailClientFactory.build(connection.getAccessToken());
+        User user = connection.getUser();
+
+        int importedCount = 0;
+        int skippedCount = 0;
+        List<TransactionResponse> createdTransactions = new ArrayList<>();
+
+        try {
+            ListMessagesResponse listResponse = gmail.users().messages().list("me")
+                    .setQ(GMAIL_QUERY)
+                    .setMaxResults(MAX_MESSAGES)
+                    .execute();
+
+            if (listResponse.getMessages() == null || listResponse.getMessages().isEmpty()) {
+                return new MockReceiptImportResult(0, 0, createdTransactions);
+            }
+
+            for (com.google.api.services.gmail.model.Message messageRef : listResponse.getMessages()) {
+                try {
+                    Message message = gmail.users().messages().get("me", messageRef.getId())
+                            .setFormat("metadata")
+                            .setMetadataHeaders(List.of("Subject", "From", "Date"))
+                            .execute();
+
+                    String subject = headerValue(message, "Subject");
+                    String from = headerValue(message, "From");
+                    String snippet = message.getSnippet();
+                    Long internalDate = message.getInternalDate();
+
+                    Optional<GmailReceiptParser.ParsedGmailReceipt> parsedReceipt = receiptParser.parse(
+                            subject,
+                            snippet,
+                            from,
+                            internalDate
+                    );
+
+                    if (parsedReceipt.isEmpty()) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    GmailReceiptParser.ParsedGmailReceipt receipt = parsedReceipt.get();
+
+                    if (isDuplicate(user.getId(), receipt.merchant(), receipt.amount(), receipt.transactionDate())) {
+                        skippedCount++;
+                        continue;
+                    }
+
+                    LocalDateTime now = LocalDateTime.now();
+                    Transaction transaction = new Transaction(
+                            UUID.randomUUID(),
+                            user,
+                            null,
+                            receipt.merchant(),
+                            receipt.amount(),
+                            receipt.currency(),
+                            receipt.transactionDate(),
+                            receipt.description(),
+                            TransactionSource.GMAIL,
+                            now,
+                            now
+                    );
+
+                    Transaction saved = transactionRepository.save(transaction);
+                    createdTransactions.add(toResponse(saved));
+                    importedCount++;
+                } catch (Exception exception) {
+                    skippedCount++;
+                    log.debug("Skipped Gmail message during sync");
+                }
+            }
+        } catch (IOException exception) {
+            log.warn("Gmail sync failed");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_GATEWAY,
+                    "Could not sync Gmail messages"
+            );
+        }
+
+        return new MockReceiptImportResult(importedCount, skippedCount, createdTransactions);
+    }
+
+    private boolean isDuplicate(UUID userId, String merchant, BigDecimal amount, LocalDate transactionDate) {
+        return transactionRepository.existsByUser_IdAndMerchantIgnoreCaseAndAmountAndTransactionDate(
+                userId,
+                merchant.trim(),
+                amount,
+                transactionDate
+        );
+    }
+
+    private String headerValue(Message message, String headerName) {
+        if (message.getPayload() == null || message.getPayload().getHeaders() == null) {
+            return "";
+        }
+
+        for (MessagePartHeader header : message.getPayload().getHeaders()) {
+            if (headerName.equalsIgnoreCase(header.getName())) {
+                return header.getValue() == null ? "" : header.getValue();
+            }
+        }
+
+        return "";
+    }
+
+    private TransactionResponse toResponse(Transaction transaction) {
+        return new TransactionResponse(
+                transaction.getId(),
+                null,
+                null,
+                transaction.getMerchant(),
+                transaction.getAmount(),
+                transaction.getCurrency(),
+                transaction.getTransactionDate(),
+                transaction.getDescription(),
+                transaction.getSource(),
+                transaction.getCreatedAt(),
+                transaction.getUpdatedAt()
+        );
+    }
+}

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 html {
   scroll-behavior: smooth;
 }
@@ -45,4 +47,155 @@ a {
 ::selection {
   background: rgba(47, 128, 255, 0.35);
   color: #ffffff;
+}
+
+:root {
+  --luxury-blue: #3ba3ff;
+  --luxury-blue-strong: #2f80ff;
+  --luxury-purple: #8b5cf6;
+  --luxury-gold: #f6d365;
+  --luxury-radius-xl: 2rem;
+  --luxury-radius-lg: 1.5rem;
+  --luxury-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+  --luxury-glow: 0 0 0 1px rgba(59, 163, 255, 0.14), 0 24px 80px rgba(47, 128, 255, 0.18);
+}
+
+.luxury-bg {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(47, 128, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(139, 92, 246, 0.14), transparent 30%),
+    radial-gradient(circle at 50% 95%, rgba(59, 163, 255, 0.08), transparent 35%),
+    #030303;
+}
+
+.dark .luxury-bg {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(47, 128, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(139, 92, 246, 0.14), transparent 30%),
+    radial-gradient(circle at 50% 95%, rgba(59, 163, 255, 0.08), transparent 35%),
+    #030303;
+}
+
+html:not(.dark) .luxury-bg {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(47, 128, 255, 0.12), transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(139, 92, 246, 0.08), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, #eef3f8 100%);
+}
+
+.luxury-panel {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 15, 15, 0.82);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: var(--luxury-shadow);
+  border-radius: var(--luxury-radius-xl);
+}
+
+html:not(.dark) .luxury-panel {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.84);
+  color: #0f172a;
+}
+
+.luxury-card {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.045);
+  border-radius: var(--luxury-radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.luxury-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59, 163, 255, 0.35);
+  box-shadow: var(--luxury-glow);
+}
+
+html:not(.dark) .luxury-card {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.luxury-title {
+  letter-spacing: -0.045em;
+  font-weight: 800;
+}
+
+.luxury-gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, #9ccfff 45%, #d8c7ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html:not(.dark) .luxury-gradient-text {
+  background: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.luxury-muted {
+  color: #a3a3a3;
+}
+
+html:not(.dark) .luxury-muted {
+  color: #64748b;
+}
+
+.luxury-primary-button {
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3ba3ff 0%, #2f80ff 100%);
+  color: white;
+  box-shadow: 0 18px 50px rgba(47, 128, 255, 0.28);
+  transition: transform 220ms ease, opacity 220ms ease, box-shadow 220ms ease;
+}
+
+.luxury-primary-button:hover {
+  transform: translateY(-1px);
+  opacity: 0.96;
+  box-shadow: 0 24px 70px rgba(47, 128, 255, 0.34);
+}
+
+.luxury-secondary-button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
+.luxury-secondary-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 163, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html:not(.dark) .luxury-secondary-button {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.luxury-input {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: inherit;
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+
+.luxury-input:focus {
+  outline: none;
+  border-color: rgba(59, 163, 255, 0.48);
+  box-shadow: 0 0 0 4px rgba(59, 163, 255, 0.12);
+}
+
+html:not(.dark) .luxury-input {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.86);
 }

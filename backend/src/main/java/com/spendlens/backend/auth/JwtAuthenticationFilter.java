@@ -25,7 +25,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-        return path.equals("/api/auth/register") || path.equals("/api/auth/login") || path.equals("/api/health");
+
+        return path.equals("/api/auth/register")
+                || path.equals("/api/auth/login")
+                || path.equals("/api/health")
+                || path.equals("/api/auth/gmail/callback");
     }
 
     @Override
@@ -42,13 +46,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authorizationHeader.substring(7);
+
         if (!jwtService.isTokenValid(token)) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token is invalid or expired");
             return;
         }
 
         String email = jwtService.extractEmail(token);
-        Authentication authentication = new UsernamePasswordAuthenticationToken(email, null, Collections.emptyList());
+
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                email,
+                null,
+                Collections.emptyList()
+        );
+
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         filterChain.doFilter(request, response);
