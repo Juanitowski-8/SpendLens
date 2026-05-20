@@ -753,14 +753,14 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="z-50 max-h-64 w-52 overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/15 dark:bg-[#0b1220]/95"
+                    className="z-50 max-h-44 w-44 overflow-y-auto rounded-xl border border-black/10 bg-white px-1.5 py-1 shadow-[0_18px_40px_rgba(15,23,42,0.26)] dark:border-white/15 dark:bg-[#0b1220]"
                   >
                     {periodOptions.map((period) => (
                       <DropdownMenuItem
                         key={period.label}
                         onClick={() => handleSelectPeriod(period)}
                         className={cn(
-                          "flex items-center justify-between rounded-xl px-3 py-2 text-sm",
+                          "flex items-center justify-between rounded-lg px-2.5 py-1.5 text-sm",
                           period.label === selectedPeriod.label
                             ? "bg-[#2F80FF]/12 font-semibold text-[#2F80FF] dark:bg-[#3BA3FF]/20 dark:text-[#9fd4ff]"
                             : "text-neutral-800 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10",
@@ -777,15 +777,6 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <Button
-                  onClick={handleSync}
-                  disabled={syncPhase === "syncing"}
-                  className="gap-2 rounded-full bg-[#2F80FF] px-5 shadow-[0_12px_40px_rgba(47,128,255,0.28)] hover:bg-[#3BA3FF]"
-                >
-                  <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
-                  {syncPhase === "syncing" ? "Actualizando…" : "Actualizar"}
-                </Button>
-
                 <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -799,7 +790,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="end"
-                    className="z-50 w-72 rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/15 dark:bg-[#0b1220]/95"
+                    className="z-50 w-56 rounded-xl border border-black/10 bg-white px-1.5 py-1 shadow-[0_18px_40px_rgba(15,23,42,0.26)] dark:border-white/15 dark:bg-[#0b1220]"
                   >
                     <DropdownMenuItem
                       disabled={importing}
@@ -868,6 +859,15 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                <Button
+                  onClick={handleSync}
+                  disabled={syncPhase === "syncing"}
+                  className="gap-2 rounded-full bg-[#2F80FF] px-5 shadow-[0_12px_40px_rgba(47,128,255,0.28)] hover:bg-[#3BA3FF]"
+                >
+                  <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
+                  {syncPhase === "syncing" ? "Actualizando…" : "Actualizar"}
+                </Button>
               </div>
             </div>
           </section>

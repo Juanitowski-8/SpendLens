@@ -35,11 +35,12 @@ public class GmailSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(GmailSyncService.class);
     private static final String GMAIL_QUERY =
-            "newer_than:90d ("
+            "("
                     + "subject:(recibo OR receipt OR factura OR comprobante OR confirmación OR confirmacion) "
                     + "OR subject:(\"order confirmation\" OR \"tu pedido\" OR \"pago exitoso\" OR \"payment confirmation\")"
                     + ") -unsubscribe -newsletter";
-    private static final long MAX_MESSAGES = 50L;
+    private static final long PAGE_SIZE = 100L;
+    private static final int MAX_MESSAGES_TO_PROCESS = 400;
 
     private final GmailOAuthService gmailOAuthService;
     private final GmailReceiptParser receiptParser;
@@ -89,17 +90,39 @@ public class GmailSyncService {
         List<TransactionResponse> createdTransactions = new ArrayList<>();
 
         try {
-            ListMessagesResponse listResponse = gmail.users().messages().list("me")
-                    .setQ(GMAIL_QUERY)
-                    .setMaxResults(MAX_MESSAGES)
-                    .execute();
+            List<Message> messageRefs = new ArrayList<>();
+            String pageToken = null;
 
-            if (listResponse.getMessages() == null || listResponse.getMessages().isEmpty()) {
+            do {
+                ListMessagesResponse listResponse = gmail.users().messages().list("me")
+                        .setQ(GMAIL_QUERY)
+                        .setMaxResults(PAGE_SIZE)
+                        .setPageToken(pageToken)
+                        .execute();
+
+                List<Message> pageMessages = listResponse.getMessages();
+                if (pageMessages != null && !pageMessages.isEmpty()) {
+                    for (Message messageRef : pageMessages) {
+                        if (messageRefs.size() >= MAX_MESSAGES_TO_PROCESS) {
+                            break;
+                        }
+                        messageRefs.add(messageRef);
+                    }
+                }
+
+                if (messageRefs.size() >= MAX_MESSAGES_TO_PROCESS) {
+                    break;
+                }
+
+                pageToken = listResponse.getNextPageToken();
+            } while (pageToken != null && !pageToken.isBlank());
+
+            if (messageRefs.isEmpty()) {
                 gmailOAuthService.markSynced(connection);
                 return new MockReceiptImportResult(0, 0, createdTransactions, skippedReasons);
             }
 
-            for (com.google.api.services.gmail.model.Message messageRef : listResponse.getMessages()) {
+            for (Message messageRef : messageRefs) {
                 try {
                     Message message = gmail.users().messages().get("me", messageRef.getId())
                             .setFormat("metadata")
