@@ -40,7 +40,7 @@ public class GmailSyncService {
                     + "OR subject:(\"order confirmation\" OR \"tu pedido\" OR \"pago exitoso\" OR \"payment confirmation\")"
                     + ") -unsubscribe -newsletter";
     private static final long PAGE_SIZE = 100L;
-    private static final int MAX_MESSAGES_TO_PROCESS = 2000;
+    private static final int MAX_MESSAGES_TO_PROCESS = 10000;
 
     private final GmailOAuthService gmailOAuthService;
     private final GmailReceiptParser receiptParser;
@@ -131,6 +131,7 @@ public class GmailSyncService {
 
                     String subject = headerValue(message, "Subject");
                     String from = headerValue(message, "From");
+                    String dateHeader = headerValue(message, "Date");
                     String snippet = message.getSnippet();
                     Long internalDate = message.getInternalDate();
 
@@ -147,7 +148,7 @@ public class GmailSyncService {
                     }
 
                     Optional<GmailReceiptParser.ParsedGmailReceipt> parsedReceipt = receiptParser.parse(
-                            subject, snippet, from, internalDate
+                            subject, snippet, from, dateHeader, internalDate
                     );
 
                     if (parsedReceipt.isEmpty()) {

@@ -7,6 +7,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -67,6 +70,7 @@ public class GmailReceiptParser {
             String subject,
             String snippet,
             String from,
+            String dateHeader,
             Long internalDateMillis
     ) {
         if (promotionalFilter.isPromotionalEmail(subject, snippet, from)) {
@@ -103,7 +107,7 @@ public class GmailReceiptParser {
             return Optional.empty();
         }
 
-        LocalDate transactionDate = extractDate(combined, internalDateMillis);
+        LocalDate transactionDate = extractDate(combined, dateHeader, internalDateMillis);
 
         String baseDescription = truncate("Gmail: " + safe(subject) + " — " + safe(snippet), 420);
         String description = baseDescription + candidate.conversionNote();
@@ -268,15 +272,30 @@ public class GmailReceiptParser {
         return new BigDecimal(cleanedAmount);
     }
 
-    private LocalDate extractDate(String text, Long internalDateMillis) {
+    private LocalDate extractDate(String text, String dateHeader, Long internalDateMillis) {
         LocalDate parsed = parseDateFromText(text);
         if (parsed != null) {
             return parsed;
+        }
+        LocalDate parsedFromHeader = parseDateFromHeader(dateHeader);
+        if (parsedFromHeader != null) {
+            return parsedFromHeader;
         }
         if (internalDateMillis != null) {
             return Instant.ofEpochMilli(internalDateMillis).atZone(ZoneId.systemDefault()).toLocalDate();
         }
         return LocalDate.now();
+    }
+
+    private LocalDate parseDateFromHeader(String dateHeader) {
+        if (dateHeader == null || dateHeader.isBlank()) {
+            return null;
+        }
+        try {
+            return ZonedDateTime.parse(dateHeader.trim(), DateTimeFormatter.RFC_1123_DATE_TIME).toLocalDate();
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     private LocalDate parseDateFromText(String text) {
