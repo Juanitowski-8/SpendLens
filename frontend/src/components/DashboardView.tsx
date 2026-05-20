@@ -86,6 +86,8 @@ const inputClass =
 export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const selectedPeriodRef = useRef<DashboardPeriod>(PERIOD_OPTIONS[0]);
+  const lastLoadRequestIdRef = useRef(0);
 
   const [selectedPeriod, setSelectedPeriod] = useState<DashboardPeriod>(PERIOD_OPTIONS[0]);
   const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
@@ -203,7 +205,12 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     [formatAmount],
   );
 
-  const loadDashboard = useCallback(async (period: DashboardPeriod = selectedPeriod) => {
+  useEffect(() => {
+    selectedPeriodRef.current = selectedPeriod;
+  }, [selectedPeriod]);
+
+  const loadDashboard = useCallback(async (period: DashboardPeriod) => {
+    const requestId = ++lastLoadRequestIdRef.current;
     setLoading(true);
     setError(null);
 
@@ -216,17 +223,22 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
         getRecentExpenses(year, month),
       ]);
 
+      if (requestId !== lastLoadRequestIdRef.current) return;
+
       setSummary(summaryData);
       setCategoryBreakdown(breakdownData);
       setExpenses(expensesData);
       setRecentExpenses(recentData);
     } catch (err) {
+      if (requestId !== lastLoadRequestIdRef.current) return;
       const message = err instanceof Error ? err.message : "Error al cargar el dashboard";
       setError(message);
     } finally {
-      setLoading(false);
+      if (requestId === lastLoadRequestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [selectedPeriod]);
+  }, []);
 
   useEffect(() => {
     void loadDashboard(selectedPeriod);
@@ -264,7 +276,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
       setGmailMaintenanceMessage(
         `Se limpiaron ${result.count} transacciones sospechosas importadas desde Gmail.`,
       );
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       window.setTimeout(() => setGmailMaintenanceMessage(null), 6000);
     } catch (err) {
       setGmailMaintenanceError(
@@ -282,7 +294,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     try {
       const result = await recategorizeGmailTransactions();
       setGmailMaintenanceMessage(`Se actualizaron ${result.count} categorías de Gmail.`);
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       window.setTimeout(() => setGmailMaintenanceMessage(null), 6000);
     } catch (err) {
       setGmailMaintenanceError(
@@ -303,7 +315,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
       setSyncMessage(
         `Importados: ${result.importedCount} · Omitidos por baja confianza: ${result.skippedCount}`,
       );
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       await refreshGmailStatus();
       setSyncPhase("completed");
     } catch (err) {
@@ -339,7 +351,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
         categoryId: categoryIdInput || undefined,
       });
       setSuccessMessage("Gasto creado correctamente.");
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       setMerchant("");
       setAmount("");
       setCurrency("COP");
@@ -361,7 +373,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     try {
       const result = await importMockReceipts();
       setImportMessage(`Se importaron ${result.importedCount} recibos de prueba.`);
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       window.setTimeout(() => setImportMessage(null), 5000);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Error al importar recibos");
@@ -387,7 +399,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
           : `Se procesaron ${result.importedCount} recibos desde texto.`,
       );
       setReceiptText("");
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       window.setTimeout(() => setParseMessage(null), 5000);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Error al procesar el texto del recibo");
@@ -443,7 +455,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
       });
       setEditingExpense(null);
       setSuccessMessage("Gasto actualizado correctamente.");
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Error al actualizar gasto");
     } finally {
@@ -463,7 +475,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     try {
       await deleteExpense(expense.id);
       setDeleteMessage("Gasto eliminado correctamente.");
-      await loadDashboard();
+      await loadDashboard(selectedPeriodRef.current);
       window.setTimeout(() => setDeleteMessage(null), 3000);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Error al eliminar gasto");
@@ -629,15 +641,20 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
-                <span
-                  className={cn(
-                    "inline-flex h-2 w-2 rounded-full",
-                    syncPhase === "syncing" ? "animate-pulse bg-[#3BA3FF]" : "bg-emerald-500",
-                  )}
-                  aria-hidden
-                />
-                {syncStatusLabel}
+              <div className="flex flex-col items-start gap-2 lg:items-end">
+                <p className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                  Nota: sincroniza y luego elige el mes para analizar.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+                  <span
+                    className={cn(
+                      "inline-flex h-2 w-2 rounded-full",
+                      syncPhase === "syncing" ? "animate-pulse bg-[#3BA3FF]" : "bg-emerald-500",
+                    )}
+                    aria-hidden
+                  />
+                  {syncStatusLabel}
+                </div>
               </div>
             </div>
           </header>
@@ -703,16 +720,20 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       <ChevronDown className="size-4 opacity-60" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="max-h-72 w-44 overflow-y-auto">
                     {PERIOD_OPTIONS.map((period) => (
                       <DropdownMenuItem
                         key={period.label}
                         onClick={() => handleSelectPeriod(period)}
                         className={cn(
-                          period.label === selectedPeriod.label && "bg-black/5 dark:bg-white/10",
+                          "flex items-center justify-between",
+                          period.label === selectedPeriod.label && "bg-black/5 font-medium dark:bg-white/10",
                         )}
                       >
                         {period.label}
+                        {period.label === selectedPeriod.label ? (
+                          <span className="text-[10px] uppercase tracking-wide text-[#3BA3FF]">Actual</span>
+                        ) : null}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
