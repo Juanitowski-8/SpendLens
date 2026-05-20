@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,6 +34,12 @@ public class GmailReceiptParser {
 
     private static final Pattern AMOUNT_TOKEN = Pattern.compile(
             "(?:USD|US\\$|U\\$S|CAD|CA\\$|EUR|€|GBP|£|COP|COL\\$|\\$)?\\s*(\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d{1,2})?)",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern ISO_DATE_PATTERN = Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b");
+    private static final Pattern SLASH_DATE_PATTERN = Pattern.compile("\\b(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})\\b");
+    private static final Pattern LONG_DATE_PATTERN = Pattern.compile(
+            "\\b(\\d{1,2})\\s+de\\s+([a-záéíóú]+)\\s+de\\s+(\\d{4})\\b|\\b(\\d{1,2})\\s+([a-záéíóú]+)\\s+(\\d{4})\\b",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -96,9 +103,7 @@ public class GmailReceiptParser {
             return Optional.empty();
         }
 
-        LocalDate transactionDate = internalDateMillis != null
-                ? Instant.ofEpochMilli(internalDateMillis).atZone(ZoneId.systemDefault()).toLocalDate()
-                : extractDate(combined);
+        LocalDate transactionDate = extractDate(combined, internalDateMillis);
 
         String baseDescription = truncate("Gmail: " + safe(subject) + " — " + safe(snippet), 420);
         String description = baseDescription + candidate.conversionNote();
@@ -263,12 +268,78 @@ public class GmailReceiptParser {
         return new BigDecimal(cleanedAmount);
     }
 
-    private LocalDate extractDate(String text) {
-        Matcher isoMatcher = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})").matcher(text);
-        if (isoMatcher.find()) {
-            return LocalDate.parse(isoMatcher.group(1));
+    private LocalDate extractDate(String text, Long internalDateMillis) {
+        LocalDate parsed = parseDateFromText(text);
+        if (parsed != null) {
+            return parsed;
+        }
+        if (internalDateMillis != null) {
+            return Instant.ofEpochMilli(internalDateMillis).atZone(ZoneId.systemDefault()).toLocalDate();
         }
         return LocalDate.now();
+    }
+
+    private LocalDate parseDateFromText(String text) {
+        Matcher isoMatcher = ISO_DATE_PATTERN.matcher(text);
+        if (isoMatcher.find()) {
+            try {
+                int year = Integer.parseInt(isoMatcher.group(1));
+                int month = Integer.parseInt(isoMatcher.group(2));
+                int day = Integer.parseInt(isoMatcher.group(3));
+                return LocalDate.of(year, month, day);
+            } catch (RuntimeException ignored) {
+                // continue with other patterns
+            }
+        }
+
+        Matcher slashMatcher = SLASH_DATE_PATTERN.matcher(text);
+        if (slashMatcher.find()) {
+            try {
+                int day = Integer.parseInt(slashMatcher.group(1));
+                int month = Integer.parseInt(slashMatcher.group(2));
+                int year = Integer.parseInt(slashMatcher.group(3));
+                return LocalDate.of(year, month, day);
+            } catch (RuntimeException ignored) {
+                // continue with other patterns
+            }
+        }
+
+        Matcher longMatcher = LONG_DATE_PATTERN.matcher(text.toLowerCase(Locale.ROOT));
+        if (longMatcher.find()) {
+            String dayToken = longMatcher.group(1) != null ? longMatcher.group(1) : longMatcher.group(4);
+            String monthToken = longMatcher.group(2) != null ? longMatcher.group(2) : longMatcher.group(5);
+            String yearToken = longMatcher.group(3) != null ? longMatcher.group(3) : longMatcher.group(6);
+            try {
+                int day = Integer.parseInt(dayToken);
+                int year = Integer.parseInt(yearToken);
+                Month month = monthFromSpanish(monthToken);
+                return LocalDate.of(year, month, day);
+            } catch (RuntimeException ignored) {
+                // no-op
+            }
+        }
+
+        return null;
+    }
+
+    private Month monthFromSpanish(String token) {
+        String month = token.replace("á", "a").replace("é", "e").replace("í", "i")
+                .replace("ó", "o").replace("ú", "u").trim().toLowerCase(Locale.ROOT);
+        return switch (month) {
+            case "enero" -> Month.JANUARY;
+            case "febrero" -> Month.FEBRUARY;
+            case "marzo" -> Month.MARCH;
+            case "abril" -> Month.APRIL;
+            case "mayo" -> Month.MAY;
+            case "junio" -> Month.JUNE;
+            case "julio" -> Month.JULY;
+            case "agosto" -> Month.AUGUST;
+            case "septiembre", "setiembre" -> Month.SEPTEMBER;
+            case "octubre" -> Month.OCTOBER;
+            case "noviembre" -> Month.NOVEMBER;
+            case "diciembre" -> Month.DECEMBER;
+            default -> throw new IllegalArgumentException("Mes no reconocido: " + token);
+        };
     }
 
     private String safe(String value) {
