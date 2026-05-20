@@ -3,6 +3,8 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8081" : "");
 
 export const isApiConfigured = API_BASE_URL.length > 0;
+const LOGIN_TIMEOUT_MS = 12_000;
+const HEALTH_WARMUP_TIMEOUT_MS = 8_000;
 
 function ensureApiConfigured(): void {
   if (!isApiConfigured) {
@@ -186,6 +188,11 @@ export type CategoryBreakdownItem = {
   count: number;
 };
 
+export type AvailableDashboardPeriod = {
+  year: number;
+  month: number;
+};
+
 export type CreateExpensePayload = {
   merchant: string;
   amount: number;
@@ -278,16 +285,60 @@ async function getErrorMessage(response: Response): Promise<string> {
   }
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(408, timeoutMessage);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export async function login(payload: LoginRequest): Promise<AuthResponse> {
   ensureApiConfigured();
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/api/auth/login`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    LOGIN_TIMEOUT_MS,
+    "El servidor tardó demasiado en responder. Intenta de nuevo en unos segundos.",
+  );
 
   const result = await handleResponse<AuthResponse>(response);
   return persistAuthToken(result);
+}
+
+export async function warmUpBackend(): Promise<void> {
+  if (!isApiConfigured) return;
+
+  try {
+    await fetchWithTimeout(
+      `${API_BASE_URL}/api/health`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+      HEALTH_WARMUP_TIMEOUT_MS,
+      "Warm-up timeout",
+    );
+  } catch {
+    // Silencioso: es una mejora de performance, no un flujo crítico.
+  }
 }
 
 export async function register(payload: RegisterRequest): Promise<AuthResponse> {
@@ -375,6 +426,14 @@ export async function getRecentExpenses(year: number, month: number): Promise<Ex
   );
 
   return handleResponse<Expense[]>(response);
+}
+
+export async function getAvailableDashboardPeriods(limit = 18): Promise<AvailableDashboardPeriod[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await fetch(`${API_BASE_URL}/api/auth/dashboard/available-periods?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<AvailableDashboardPeriod[]>(response);
 }
 
 export async function importMockReceipts(): Promise<MockReceiptImportResult> {

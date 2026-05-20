@@ -41,6 +41,7 @@ import { exportExpensesCsv, exportExpensesExcel, exportSummaryPdf } from "@/lib/
 import { buildDailySpendData, buildSpendByStoreData } from "@/lib/chartData";
 import {
   buildRecentPeriodOptions,
+  formatPeriodLabel,
   type DashboardPeriod,
 } from "@/lib/dashboardPeriods";
 import { cn, displayCategoryName, formatCurrencyCOP } from "@/lib/utils";
@@ -48,6 +49,7 @@ import {
   getDashboardSummary,
   getCategoryBreakdown,
   getExpenses,
+  getAvailableDashboardPeriods,
   getRecentExpenses,
   createExpense,
   importMockReceipts,
@@ -75,7 +77,8 @@ type DashboardViewProps = {
 
 type AlertItem = { id: string; tone: "success" | "error"; message: string };
 
-const PERIOD_OPTIONS = buildRecentPeriodOptions(12);
+const FALLBACK_PERIOD_OPTIONS = buildRecentPeriodOptions(12);
+const DEFAULT_PERIOD = FALLBACK_PERIOD_OPTIONS[0];
 
 const glassCard =
   "rounded-[1.75rem] border border-black/10 bg-white/80 shadow-[0_24px_80px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.04] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]";
@@ -86,10 +89,11 @@ const inputClass =
 export function DashboardView({ onBackToLanding }: DashboardViewProps) {
   const topRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const selectedPeriodRef = useRef<DashboardPeriod>(PERIOD_OPTIONS[0]);
+  const selectedPeriodRef = useRef<DashboardPeriod>(DEFAULT_PERIOD);
   const lastLoadRequestIdRef = useRef(0);
 
-  const [selectedPeriod, setSelectedPeriod] = useState<DashboardPeriod>(PERIOD_OPTIONS[0]);
+  const [periodOptions, setPeriodOptions] = useState<DashboardPeriod[]>(FALLBACK_PERIOD_OPTIONS);
+  const [selectedPeriod, setSelectedPeriod] = useState<DashboardPeriod>(DEFAULT_PERIOD);
   const [periodMenuOpen, setPeriodMenuOpen] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [syncPhase, setSyncPhase] = useState<"idle" | "syncing" | "completed">("completed");
@@ -261,6 +265,33 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
     setSelectedPeriod(period);
     setPeriodMenuOpen(false);
   };
+
+  const loadAvailablePeriods = useCallback(async () => {
+    try {
+      const available = await getAvailableDashboardPeriods(18);
+      if (available.length === 0) {
+        setPeriodOptions(FALLBACK_PERIOD_OPTIONS);
+        return;
+      }
+
+      const mapped = available.map((period) => ({
+        year: period.year,
+        month: period.month,
+        label: formatPeriodLabel(period.year, period.month),
+      }));
+
+      setPeriodOptions(mapped);
+      setSelectedPeriod((current) =>
+        mapped.find((option) => option.year === current.year && option.month === current.month) ?? mapped[0],
+      );
+    } catch {
+      setPeriodOptions(FALLBACK_PERIOD_OPTIONS);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAvailablePeriods();
+  }, [loadAvailablePeriods]);
 
   const scrollTo = (target: "top" | "table") => {
     const el = target === "top" ? topRef.current : tableRef.current;
@@ -563,10 +594,10 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
 
   const syncStatusLabel =
     syncPhase === "syncing"
-      ? "Sincronizando correos de Gmail…"
+      ? "Actualizando datos desde Gmail…"
       : syncPhase === "completed"
-        ? "Última sincronización lista"
-        : "Listo para sincronizar";
+        ? "Última actualización lista"
+        : "Listo para actualizar";
 
   return (
     <div className="min-h-[calc(100vh-5rem)]">
@@ -596,7 +627,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
             </p>
             <p>
               <span className="font-medium text-neutral-950 dark:text-white">2.</span> Pulsa{" "}
-              <span className="text-[#3BA3FF]">Sincronizar Gmail</span> para importar recibos.
+              <span className="text-[#3BA3FF]">Actualizar</span> para importar recibos.
             </p>
             <p>
               <span className="font-medium text-neutral-950 dark:text-white">3.</span> Revisa totales
@@ -720,19 +751,26 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       <ChevronDown className="size-4 opacity-60" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-72 w-44 overflow-y-auto">
-                    {PERIOD_OPTIONS.map((period) => (
+                  <DropdownMenuContent
+                    align="end"
+                    className="z-50 max-h-64 w-52 overflow-y-auto rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/15 dark:bg-[#0b1220]/95"
+                  >
+                    {periodOptions.map((period) => (
                       <DropdownMenuItem
                         key={period.label}
                         onClick={() => handleSelectPeriod(period)}
                         className={cn(
-                          "flex items-center justify-between",
-                          period.label === selectedPeriod.label && "bg-black/5 font-medium dark:bg-white/10",
+                          "flex items-center justify-between rounded-xl px-3 py-2 text-sm",
+                          period.label === selectedPeriod.label
+                            ? "bg-[#2F80FF]/12 font-semibold text-[#2F80FF] dark:bg-[#3BA3FF]/20 dark:text-[#9fd4ff]"
+                            : "text-neutral-800 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10",
                         )}
                       >
                         {period.label}
                         {period.label === selectedPeriod.label ? (
-                          <span className="text-[10px] uppercase tracking-wide text-[#3BA3FF]">Actual</span>
+                          <span className="ml-2 rounded-full bg-[#2F80FF]/15 px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#2F80FF] dark:bg-[#3BA3FF]/25 dark:text-[#9fd4ff]">
+                            Actual
+                          </span>
                         ) : null}
                       </DropdownMenuItem>
                     ))}
@@ -745,7 +783,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                   className="gap-2 rounded-full bg-[#2F80FF] px-5 shadow-[0_12px_40px_rgba(47,128,255,0.28)] hover:bg-[#3BA3FF]"
                 >
                   <RefreshCw className={cn("size-4", syncPhase === "syncing" && "animate-spin")} />
-                  {syncPhase === "syncing" ? "Sincronizando…" : "Sincronizar Gmail"}
+                  {syncPhase === "syncing" ? "Actualizando…" : "Actualizar"}
                 </Button>
 
                 <DropdownMenu open={actionsMenuOpen} onOpenChange={setActionsMenuOpen}>
@@ -759,9 +797,13 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       <MoreHorizontal className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuContent
+                    align="end"
+                    className="z-50 w-72 rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-[0_24px_60px_rgba(15,23,42,0.28)] backdrop-blur-xl dark:border-white/15 dark:bg-[#0b1220]/95"
+                  >
                     <DropdownMenuItem
                       disabled={importing}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
                       onClick={() => {
                         setActionsMenuOpen(false);
                         void handleImportReceipts();
@@ -771,6 +813,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={cleaningGmail}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
                       onClick={() => {
                         setActionsMenuOpen(false);
                         void handleCleanSuspiciousGmail();
@@ -780,6 +823,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       disabled={recategorizingGmail}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
                       onClick={() => {
                         setActionsMenuOpen(false);
                         void handleRecategorizeGmail();
@@ -788,20 +832,33 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
                       {recategorizingGmail ? "Recategorizando…" : "Recategorizar Gmail"}
                     </DropdownMenuItem>
                     <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
-                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); handleExportCsv(); }}>
+                    <DropdownMenuItem
+                      disabled={exporting}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
+                      onClick={() => { setActionsMenuOpen(false); handleExportCsv(); }}
+                    >
                       <Download className="mr-2 size-4" />
                       {exporting ? "Exportando…" : "Exportar CSV"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); void handleExportExcel(); }}>
+                    <DropdownMenuItem
+                      disabled={exporting}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
+                      onClick={() => { setActionsMenuOpen(false); void handleExportExcel(); }}
+                    >
                       <Download className="mr-2 size-4" />
                       Exportar Excel
                     </DropdownMenuItem>
-                    <DropdownMenuItem disabled={exporting} onClick={() => { setActionsMenuOpen(false); handleExportPdf(); }}>
+                    <DropdownMenuItem
+                      disabled={exporting}
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
+                      onClick={() => { setActionsMenuOpen(false); handleExportPdf(); }}
+                    >
                       <Download className="mr-2 size-4" />
                       Exportar resumen PDF
                     </DropdownMenuItem>
                     <div className="my-1 h-px bg-black/10 dark:bg-white/10" role="separator" />
                     <DropdownMenuItem
+                      className="rounded-xl px-3 py-2 text-sm text-neutral-800 focus:bg-black/5 dark:text-neutral-200 dark:focus:bg-white/10"
                       onClick={() => {
                         setActionsMenuOpen(false);
                         scrollTo("table");

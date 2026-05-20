@@ -19,6 +19,7 @@ import { DashboardView } from "@/components/DashboardView";
 import { Navbar } from "@/components/Navbar";
 import { PremiumBackground } from "@/components/PremiumBackground";
 import {
+  ApiError,
   connectGmail,
   forgotPassword,
   isApiConfigured,
@@ -26,6 +27,7 @@ import {
   logout,
   register,
   resetPassword,
+  warmUpBackend,
 } from "@/lib/api";
 import type { LoginRequest, RegisterRequest } from "@/lib/api";
 import type { PublicPage } from "@/types/navigation";
@@ -122,6 +124,10 @@ export default function App() {
   }, [isAuthenticated, navigateToPage]);
 
   useEffect(() => {
+    void warmUpBackend();
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("resetToken");
     if (token) {
@@ -162,6 +168,7 @@ export default function App() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
+    let slowLoginTimer: number | undefined;
     setLoading(true);
     setError(null);
     setMessage(null);
@@ -185,7 +192,12 @@ export default function App() {
       }
 
       if (authMode === "login") {
+        setMessage("Validando acceso...");
+        slowLoginTimer = window.setTimeout(() => {
+          setMessage("Despertando servidor, puede tardar unos segundos...");
+        }, 1800);
         await login({ email, password } as LoginRequest);
+        if (slowLoginTimer) window.clearTimeout(slowLoginTimer);
         setMessage("Inicio de sesión correcto. Abriendo dashboard...");
       } else {
         await register({ name, email, password } as RegisterRequest);
@@ -195,8 +207,14 @@ export default function App() {
       setIsAuthenticated(true);
       openDashboard();
     } catch (err) {
+      if (slowLoginTimer) window.clearTimeout(slowLoginTimer);
+      if (err instanceof ApiError && err.status === 408) {
+        setError("El servidor está tardando en responder. Inténtalo de nuevo en unos segundos.");
+        return;
+      }
       setError(err instanceof Error ? err.message : "Error en la autenticación");
     } finally {
+      if (slowLoginTimer) window.clearTimeout(slowLoginTimer);
       setLoading(false);
     }
   }, [authMode, confirmPassword, email, name, openDashboard, password, resetToken]);

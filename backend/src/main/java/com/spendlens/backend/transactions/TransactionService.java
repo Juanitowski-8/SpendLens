@@ -42,6 +42,15 @@ public class TransactionService {
     }
 
     @Transactional(readOnly = true)
+    public List<YearMonth> findAvailablePeriods(String email, int limit) {
+        int normalizedLimit = Math.max(1, Math.min(limit, 36));
+        return transactionRepository.findAvailablePeriodsByUserEmail(normalizeEmail(email), normalizedLimit)
+                .stream()
+                .map(period -> YearMonth.of(period.getYear(), period.getMonth()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<Transaction> findTransactionsForPeriod(String email, Integer year, Integer month) {
         String normalizedEmail = normalizeEmail(email);
         YearMonth period = com.spendlens.backend.dashboard.DashboardPeriod.resolve(year, month);

@@ -3,6 +3,7 @@ package com.spendlens.backend.auth;
 import com.spendlens.backend.dashboard.CategoryBreakdownResponse;
 import com.spendlens.backend.dashboard.DashboardService;
 import com.spendlens.backend.dashboard.DashboardSummaryResponse;
+import com.spendlens.backend.dashboard.AvailablePeriodResponse;
 import com.spendlens.backend.transactions.CreateTransactionRequest;
 import com.spendlens.backend.transactions.TransactionResponse;
 import com.spendlens.backend.transactions.TransactionService;
@@ -119,6 +120,14 @@ public class AuthController {
             @RequestParam(required = false) Integer month
     ) {
         return dashboardService.getRecentExpenses(getEmail(authentication), year, month);
+    }
+
+    @GetMapping("/dashboard/available-periods")
+    public List<AvailablePeriodResponse> getAvailablePeriods(
+            Authentication authentication,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return dashboardService.getAvailablePeriods(getEmail(authentication), limit);
     }
 
     private String getEmail(Authentication authentication) {

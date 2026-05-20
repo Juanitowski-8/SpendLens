@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.YearMonth;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -64,6 +65,15 @@ public class DashboardService {
                 .limit(10)
                 .map(this::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AvailablePeriodResponse> getAvailablePeriods(String email, Integer limit) {
+        int safeLimit = limit == null ? 18 : limit;
+        List<YearMonth> periods = transactionService.findAvailablePeriods(email, safeLimit);
+        return periods.stream()
+                .map(period -> new AvailablePeriodResponse(period.getYear(), period.getMonthValue()))
+                .toList();
     }
 
     private List<Transaction> findTransactions(String email, Integer year, Integer month) {
