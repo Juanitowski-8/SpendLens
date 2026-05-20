@@ -674,7 +674,7 @@ export function DashboardView({ onBackToLanding }: DashboardViewProps) {
 
               <div className="flex flex-col items-start gap-2 lg:items-end">
                 <p className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                  Nota: sincroniza y luego elige el mes para analizar.
+                  Recomendación: mantén tu cuenta de Gmail depurada (sin spam ni promociones) para mejorar la precisión del análisis mensual.
                 </p>
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
                   <span
