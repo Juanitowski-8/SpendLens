@@ -37,6 +37,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             LocalDate transactionDate
     );
 
+    Optional<Transaction> findFirstByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountOrderByUpdatedAtDesc(
+            UUID userId,
+            TransactionSource source,
+            String merchant,
+            BigDecimal amount
+    );
+
     List<Transaction> findByUserEmailAndSource(String email, TransactionSource source);
 
     @Query(

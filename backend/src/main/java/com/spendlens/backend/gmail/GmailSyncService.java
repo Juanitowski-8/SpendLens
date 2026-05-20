@@ -40,7 +40,7 @@ public class GmailSyncService {
                     + "OR subject:(\"order confirmation\" OR \"tu pedido\" OR \"pago exitoso\" OR \"payment confirmation\")"
                     + ") -unsubscribe -newsletter";
     private static final long PAGE_SIZE = 100L;
-    private static final int MAX_MESSAGES_TO_PROCESS = 10000;
+    private static final int MAX_MESSAGES_TO_PROCESS = 25000;
 
     private final GmailOAuthService gmailOAuthService;
     private final GmailReceiptParser receiptParser;
@@ -175,6 +175,24 @@ public class GmailSyncService {
                         continue;
                     }
 
+                    Optional<Transaction> latestSimilar = findLatestSimilar(
+                            user.getId(),
+                            normalizedMerchant,
+                            receipt.amount()
+                    );
+                    if (latestSimilar.isPresent()) {
+                        Transaction existing = latestSimilar.get();
+                        if (shouldCorrectExistingDate(existing, receipt.transactionDate())) {
+                            existing.setTransactionDate(receipt.transactionDate());
+                            existing.setDescription(receipt.description());
+                            existing.setUpdatedAt(LocalDateTime.now());
+                            Transaction corrected = transactionRepository.save(existing);
+                            createdTransactions.add(transactionService.mapToResponse(corrected));
+                            importedCount++;
+                            continue;
+                        }
+                    }
+
                     String categoryName = categoryAssigner.assignCategory(normalizedMerchant, subject, snippet);
                     Category category = categoryService.getOrCreateByName(user.getEmail(), categoryName);
 
@@ -223,6 +241,23 @@ public class GmailSyncService {
         return transactionRepository.existsByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountAndTransactionDate(
                 userId, TransactionSource.GMAIL, merchant, amount, transactionDate
         );
+    }
+
+    private Optional<Transaction> findLatestSimilar(UUID userId, String merchant, BigDecimal amount) {
+        return transactionRepository.findFirstByUser_IdAndSourceAndMerchantIgnoreCaseAndAmountOrderByUpdatedAtDesc(
+                userId, TransactionSource.GMAIL, merchant, amount
+        );
+    }
+
+    private boolean shouldCorrectExistingDate(Transaction existing, LocalDate parsedDate) {
+        if (existing.getTransactionDate() == null || parsedDate == null) {
+            return false;
+        }
+        if (existing.getTransactionDate().isEqual(parsedDate)) {
+            return false;
+        }
+        String description = existing.getDescription() == null ? "" : existing.getDescription();
+        return description.startsWith("Gmail:");
     }
 
     private String headerValue(Message message, String headerName) {
